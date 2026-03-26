@@ -1,0 +1,7 @@
+.venv/
+.venv313/
+__pycache__/
+*.pyc
+Datasets/
+*.parquet
+*.log
