@@ -1,0 +1,25 @@
+python `
+"local_test.py" `
+--data_dir "..\Datasets\IoT23\iot_23_datasets_full\opt\Malware-Project\BigDataset\IoTScenarios" `
+--out_dir "..\Datasets\IoT23\test_sample" `
+--n_rows 2000 `
+--seed 42 `
+--force
+
+
+
+python `
+"data_prep_iot23.py" `
+--data_dir "..\Datasets\IoT23\test_sample" `
+--out_dir "..\Datasets\processed_test" `
+--sample 1.0 `
+--seed 42
+
+
+python `
+>> "train_baseline_rf.py" `
+>> --data_dir "..\Datasets\processed_test\iot23" `
+>> --out_dir "..\Datasets\processed_test\iot23\rf_baseline" `
+>> --target_col label_binary `
+>> --seed 42
+
