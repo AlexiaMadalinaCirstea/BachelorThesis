@@ -1,5 +1,5 @@
 """
-Scenario level split for utilities for IoT-23.
+Scenario level split for utilities for IoT-23
 """
 
 from typing import Dict, List

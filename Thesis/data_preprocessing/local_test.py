@@ -1,5 +1,5 @@
 """
-This creates a small but representative IoT-23 sample for local testing.
+This creates a small but representative IoT-23 sample for local testing
 
 What it preserves:
 - original folder structure
@@ -124,7 +124,23 @@ def find_conn_logs(data_dir: str):
 
     for src in sorted(files):
         rel = os.path.relpath(src, data_dir)
-        scenario = Path(src).parent.parent.name
+        parts = Path(src).parts
+
+        try:
+            bro_idx = parts.index("bro")
+            parent_1 = parts[bro_idx - 1] if bro_idx - 1 >= 0 else ""
+            parent_2 = parts[bro_idx - 2] if bro_idx - 2 >= 0 else ""
+
+            if parent_1.startswith("CTU-"):
+                scenario = parent_1
+            elif parent_2.startswith("CTU-"):
+                scenario = parent_2
+            else:
+                scenario = Path(src).parent.parent.name
+
+        except (ValueError, IndexError):
+            scenario = Path(src).parent.parent.name
+
         result.append((scenario, src, rel))
 
     return result
