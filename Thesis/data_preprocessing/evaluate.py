@@ -1,5 +1,5 @@
 """
-I built this as a reusable evaluation script for thesis experiments.
+I built this as a reusable evaluation script for thesis experiments
 
 What it supports:
 - binary or multiclass evaluation

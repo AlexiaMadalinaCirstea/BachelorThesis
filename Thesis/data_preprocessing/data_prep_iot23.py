@@ -554,24 +554,41 @@ def build_feature_info(combined: pd.DataFrame) -> dict:
 
 # File discovery
 
-def find_conn_logs(data_dir: str) -> List[Tuple[str, str]]:
+def find_conn_logs(data_dir: str):
+    """
+    It walks the IoT-23 directory tree and return list of (scenario_name, filepath)
+    Supports both layouts:
+    1) .../SCENARIO/bro/conn.log.labeled
+    2) .../SCENARIO/device_name/bro/conn.log.labeled
+    """
     pattern = os.path.join(data_dir, "**", "bro", "conn.log.labeled")
     files = glob.glob(pattern, recursive=True)
 
     result = []
-    seen_scenarios = set()
-
     for f in sorted(files):
         parts = Path(f).parts
+
         try:
             bro_idx = parts.index("bro")
-            scenario = parts[bro_idx - 1]
+
+            parent_1 = parts[bro_idx - 1] if bro_idx - 1 >= 0 else ""
+            parent_2 = parts[bro_idx - 2] if bro_idx - 2 >= 0 else ""
+
+            # Normal case:
+            # .../CTU-IoT-Malware-Capture-34-1/bro/conn.log.labeled
+            if parent_1.startswith("CTU-"):
+                scenario = parent_1
+
+            # Nested honeypot/device case:
+            # .../CTU-Honeypot-Capture-7-1/Somfy-01/bro/conn.log.labeled
+            elif parent_2.startswith("CTU-"):
+                scenario = parent_2
+
+            else:
+                scenario = Path(f).parent.parent.name
+
         except (ValueError, IndexError):
             scenario = Path(f).parent.parent.name
-
-        if scenario in seen_scenarios:
-            log.warning("Duplicate scenario folder name discovered: %s", scenario)
-        seen_scenarios.add(scenario)
 
         result.append((scenario, f))
 

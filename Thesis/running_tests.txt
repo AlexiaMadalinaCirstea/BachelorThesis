@@ -8,18 +8,23 @@ python `
 
 
 
-python `
-"data_prep_iot23.py" `
---data_dir "..\Datasets\IoT23\test_sample" `
---out_dir "..\Datasets\processed_test" `
+python data_preprocessing/data_prep_iot23.py `
+--data_dir "Datasets\IoT23\test_sample" `
+--out_dir "Datasets\IoT23\processed_test_sample" `
 --sample 1.0 `
 --seed 42
 
 
-python `
->> "train_baseline_rf.py" `
->> --data_dir "..\Datasets\processed_test\iot23" `
->> --out_dir "..\Datasets\processed_test\iot23\rf_baseline" `
->> --target_col label_binary `
->> --seed 42
+python data_preprocessing/train_baseline_rf.py `
+--data_dir "Datasets\IoT23\processed_test_sample\iot23" `
+--out_dir "Datasets\IoT23\processed_test_sample\iot23\rf_baseline" `
+--target_col label_binary `
+--seed 42
 
+python data_preprocessing/evaluate.py `
+--pred_file "Datasets\IoT23\processed_test_sample\iot23\rf_baseline\rf_test_predictions.parquet" `
+--out_dir "Datasets\IoT23\processed_test_sample\iot23\rf_baseline\eval" `
+--task binary `
+--y_true_col label_binary `
+--y_pred_col y_pred `
+--y_score_col y_score
