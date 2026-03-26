@@ -28,3 +28,9 @@ python data_preprocessing/evaluate.py `
 --y_true_col label_binary `
 --y_pred_col y_pred `
 --y_score_col y_score
+
+python data_preprocessing/loso_rf.py `
+  --data_file "Datasets\IoT23\processed_test_sample\iot23\all_flows.parquet" `
+  --out_dir "Datasets\IoT23\processed_test_sample\iot23\rf_loso" `
+  --target_col label_binary `
+  --seed 42
