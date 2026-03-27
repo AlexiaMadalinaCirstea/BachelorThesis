@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import pandas as pd
+import joblib
 
 from evaluate import compute_overall_metrics_binary
 from splitters import generate_loso_splits
@@ -204,6 +205,8 @@ def run_fold(
         params=best_params,
     )
     final_pipeline.fit(X_outer_train, y_outer_train)
+
+    joblib.dump(final_pipeline, fold_dir / "model.joblib")
 
     test_score = final_pipeline.predict_proba(X_test)[:, 1]
     test_pred = (test_score >= best_threshold).astype(int)

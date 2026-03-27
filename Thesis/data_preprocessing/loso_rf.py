@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import pandas as pd
+import joblib
 
 from splitters import generate_loso_splits
 from train_baseline_rf import (
@@ -182,6 +183,7 @@ def run_fold(df: pd.DataFrame, split: Dict[str, List[str]], out_dir: Path, targe
 
     pipeline = build_pipeline(seed=seed)
     pipeline.fit(X_train, y_train)
+    joblib.dump(pipeline, fold_dir / "model.joblib")
 
     y_pred = pipeline.predict(X_test)
     y_score = pipeline.predict_proba(X_test)[:, 1]
@@ -285,3 +287,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
