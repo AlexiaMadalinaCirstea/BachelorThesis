@@ -34,3 +34,24 @@ python data_preprocessing/loso_rf.py `
   --out_dir "Datasets\IoT23\processed_test_sample\iot23\rf_loso" `
   --target_col label_binary `
   --seed 42
+
+
+
+python data_preprocessing/cross_dataset_eval.py `
+  --iot_csv "Datasets\IoT23\processed_full\iot23\iot23_final.csv" `
+  --unsw_csv "Datasets\UNSW_NB15\processed_full\unsw_nb15\unsw_final.csv" `
+  --out_dir "Datasets\cross_dataset_eval" `
+  --models rf xgb `
+  --drop_cols timestamp scenario_id
+
+
+python data_preprocessing/plot_cross_dataset_results.py `
+  --summary_csv "Datasets\cross_dataset_eval\cross_dataset_summary.csv" `
+  --out_dir "Datasets\cross_dataset_eval\plots"
+
+
+
+python data_preprocessing/plot_feature_stability_full.py `
+  --rf_summary "Datasets\IoT23\processed_test_sample\iot23\feature_stability_analysis\rf_feature_stability_summary.csv" `
+  --xgb_summary "Datasets\IoT23\processed_test_sample\iot23\feature_stability_analysis\xgb_feature_stability_summary.csv" `
+  --out_dir "Datasets\IoT23\processed_test_sample\iot23\feature_stability_plots"
