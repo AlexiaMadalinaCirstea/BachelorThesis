@@ -1,0 +1,60 @@
+# README FOR MY THESIS REPOSITORY
+# NOTE: THIS IS NOT THE FINAL README! IT IS BEING UPDATED AS I'M WORKING ON IT
+
+This repository contains the code and the pipeline for my bachelor thesis on intrusion detection under domain shift, with a focus on understanding why machine learning models fail to generalize across heterogeneous network environments.
+
+My thesis investigates how models trained on network traffic from IoT environments behave under scenario shift and cross-domain transfer, and whether this failure can be explained through feature instability rather than model capacity alone. I will also explore transfer learning based on this, early intrusion detection as well as hybrid architectures and models and deep learning!
+
+## Thesis focus
+
+The core research question is not simply which model performs best, but rather:
+
+- how domain shift affects intrusion detection performance,
+- which features remain stable across scenarios,
+- which features transfer across domains,
+- and why strong models fail on unseen environments.
+
+The main datasets used are:
+
+- **IoT-23** for scenario-based intrusion detection experiments. Link for download: https://www.stratosphereips.org/datasets-iot23
+- **UNSW-NB15** for cross-domain evaluation. Link for download: https://unsw-my.sharepoint.com/personal/z5025758_ad_unsw_edu_au/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fz5025758%5Fad%5Funsw%5Fedu%5Fau%2FDocuments%2FUNSW%2DNB15%20dataset&ga=1
+
+## Current research direction
+
+So far, the project includes:
+
+- preprocessing and parsing of IoT-23 `conn.log.labeled` files,
+- leakage-safe scenario-level splitting,
+- baseline Random Forest and XGBoost models,
+- Leave-One-Scenario-Out (LOSO) evaluation on both models,
+- feature stability analysis across LOSO folds,
+- transferability-oriented feature analysis,
+- cross-dataset evaluation tooling.
+
+A central finding of my work is that generalization failure under domain shift appears to be driven more by **instability in feature reliance** than by insufficient model complexity.
+
+## Repository structure
+
+The project currently uses the following structure:
+
+```text
+data_preprocessing/
+├── analyze_feature_transfer.py
+├── analyze_loso_results_rf.py
+├── compare_baseline_models.py
+├── compute_feature_stability.py
+├── cross_dataset_eval.py
+├── data_prep_iot23.py
+├── evaluate.py
+├── local_test.py
+├── loso_rf.py
+├── loso_xgboost.py
+├── plot_cross_dataset_results.py
+├── plot_feature_stability_full.py
+├── research_analysis_suite.py
+├── splitters.py
+├── train_baseline_rf.py
+└── train_baseline_xgboost.py
+
+
+Obviously, this will change and will adapt as I go. I aim to achieve separations of concerns for a better understandability, and I know that my current repository structure is not denoting that. Apologies for this :(
