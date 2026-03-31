@@ -1,0 +1,23 @@
+{
+  "source": "Datasets\\IoT23\\processed_test_sample\\iot23\\train.parquet",
+  "n_features": 17,
+  "features": [
+    "proto",
+    "service",
+    "conn_state",
+    "duration",
+    "orig_bytes",
+    "resp_bytes",
+    "missed_bytes",
+    "orig_pkts",
+    "orig_ip_bytes",
+    "resp_pkts",
+    "resp_ip_bytes",
+    "bytes_ratio",
+    "pkts_ratio",
+    "orig_bytes_per_pkt",
+    "resp_bytes_per_pkt",
+    "detailed_label",
+    "label_phase"
+  ]
+}
