@@ -55,3 +55,7 @@ python data_preprocessing/plot_feature_stability_full.py `
   --rf_summary "Datasets\IoT23\processed_test_sample\iot23\feature_stability_analysis\rf_feature_stability_summary.csv" `
   --xgb_summary "Datasets\IoT23\processed_test_sample\iot23\feature_stability_analysis\xgb_feature_stability_summary.csv" `
   --out_dir "Datasets\IoT23\processed_test_sample\iot23\feature_stability_plots"
+
+
+Running the preprocessing on the full dataset:
+python data_preprocessing/data_prep_iot23.py --data_dir "Datasets/IoT23/iot_23_datasets_full/opt/Malware-Project/BigDataset/IoTScenarios" --out_dir "Datasets/IoT23/processed_full" --sample 1.0 --seed 42
