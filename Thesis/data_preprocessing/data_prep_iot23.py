@@ -1,23 +1,26 @@
 """
-What my script does:
+IoT-23 preprocessing pipeline (chunked full-dataset-safe version)
+
+What this script does:
 - parses all conn.log.labeled files from IoT-23
 - extracts Zeek flow features
 - assigns binary and multi-phase labels
 - applies scenario-level splits (no row-level leakage)
 - validates assumptions aggressively
-- saves processed Parquet files and audit reports
+- saves per-scenario chunk parquet files first
+- combines chunk files into final scenario parquet
+- combines final scenario parquet files into dataset-level outputs
 
-How to use it: 
+Usage:
     python data_prep_iot23.py \
         --data_dir /path/to/iot_23_datasets_full \
-        --out_dir  /path/to/processed \
-        --sample   1.0 \
-        --seed     42
+        --out_dir /path/to/processed \
+        --sample 1.0 \
+        --seed 42
 
-ALSO NOTE THAT THIS IS FOR THE WHOLE DATASET PROCESSING (CLUSTER VERSION)! NOT THE LOCAL RUN!
-FIND THE LOCAL RUN IN running_tests.txt!
-
-Outputs in Datasets/processed_test/iot23:
+Outputs in <out_dir>/iot23:
+    processed_chunks/<scenario>_partXXXX.parquet
+    processed_scenarios/<scenario>.parquet
     all_flows.parquet
     train.parquet
     val.parquet
@@ -30,26 +33,26 @@ Outputs in Datasets/processed_test/iot23:
     label_mapping_report.csv
 """
 
+from __future__ import annotations
+
 import os
 import re
 import json
 import glob
+import gc
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Iterator
 
 import numpy as np
 import pandas as pd
 
 
-
 # Logging
-
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
-
 
 
 # Constants
@@ -87,7 +90,16 @@ ZEEK_BASE_COLS = [
     "tunnel_parents",
 ]
 
+FINAL_FEATURE_COLS = (
+    ["ts", "scenario", "split"]
+    + ZEEK_CATEGORICAL_COLS
+    + ZEEK_NUMERIC_COLS
+    + ENGINEERED_COLS
+    + ["label", "detailed_label", "label_binary", "label_phase"]
+)
+
 REQUIRED_PARSED_COLS = set(ZEEK_BASE_COLS + ["label", "detailed_label", "scenario"])
+
 ALLOWED_PHASES = {
     "benign",
     "c2c",
@@ -100,24 +112,24 @@ ALLOWED_PHASES = {
 }
 
 PHASE_MAP = {
-    "benign":                           "benign",
-    "c&c":                              "c2c",
-    "c&c-filedownload":                 "c2c",
-    "c&c-heartbeat":                    "c2c",
-    "c&c-heartbeat-attack":             "c2c",
-    "c&c-heartbeat-filedownload":       "c2c",
-    "c&c-mirai":                        "c2c",
-    "c&c-partofahorizontalportscan":    "c2c",
-    "c&c-torii":                        "c2c",
-    "filedownload":                     "filedownload",
-    "heartbeat":                        "c2c",
-    "ddos":                             "ddos",
-    "attack":                           "attack",
-    "okiru":                            "scanning",
-    "okiru-attack":                     "attack",
-    "partofahorizontalportscan":        "scanning",
+    "benign": "benign",
+    "c&c": "c2c",
+    "c&c-filedownload": "c2c",
+    "c&c-heartbeat": "c2c",
+    "c&c-heartbeat-attack": "c2c",
+    "c&c-heartbeat-filedownload": "c2c",
+    "c&c-mirai": "c2c",
+    "c&c-partofahorizontalportscan": "c2c",
+    "c&c-torii": "c2c",
+    "filedownload": "filedownload",
+    "heartbeat": "c2c",
+    "ddos": "ddos",
+    "attack": "attack",
+    "okiru": "scanning",
+    "okiru-attack": "attack",
+    "partofahorizontalportscan": "scanning",
     "partofahorizontalportscan-attack": "attack",
-    "mirai":                            "scanning",
+    "mirai": "scanning",
 }
 
 TEST_SCENARIOS = [
@@ -136,7 +148,7 @@ VAL_SCENARIOS = [
 ]
 
 
-# Utility helpers
+# Helpers
 
 def save_json(obj: dict, path: Path) -> None:
     with open(path, "w", encoding="utf-8") as f:
@@ -181,17 +193,9 @@ def get_split(scenario_name: str) -> str:
     return mapping.get(scenario_name, "train")
 
 
-# Parser
+# Parser helpers
 
 def split_tunnel_and_labels(raw_tail: str) -> Tuple[str, str, str]:
-    """
-    IoT-23 appends label columns after the 21st Zeek field.
-    Separation is typically 3+ spaces:
-        tunnel_parents   label   detailed-label
-
-    Returns:
-        tunnel_parents, label, detailed_label
-    """
     if raw_tail is None:
         return "-", "-", "-"
 
@@ -211,20 +215,28 @@ def split_tunnel_and_labels(raw_tail: str) -> Tuple[str, str, str]:
     return tunnel_parents, label, detailed_label
 
 
-def parse_conn_log_labeled(filepath: str, scenario_name: str) -> pd.DataFrame:
+def iter_conn_log_chunks(
+    filepath: str,
+    scenario_name: str,
+    chunk_rows: int = 500_000,
+    log_every_lines: int = 500_000,
+) -> Iterator[Tuple[pd.DataFrame, int, int]]:
     """
-    Parse one IoT-23 conn.log.labeled file.
+    Yield parsed DataFrame chunks for one conn.log.labeled file.
 
-    Assumes:
-    - Zeek base columns are tab-separated
-    - label and detailed_label are appended after field 21
+    Yields:
+        (chunk_df, total_lines_seen, malformed_rows_so_far)
     """
     rows = []
     malformed_rows = 0
     discovered_fields = None
+    line_no = 0
 
     with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
         for line_no, line in enumerate(fh, start=1):
+            if line_no % log_every_lines == 0:
+                log.info("%s: processed %d lines so far", scenario_name, line_no)
+
             line = line.rstrip("\n")
 
             if not line.strip():
@@ -244,49 +256,46 @@ def parse_conn_log_labeled(filepath: str, scenario_name: str) -> pd.DataFrame:
                 continue
 
             tunnel_parents, label, detailed_label = split_tunnel_and_labels(parts[20])
-
             row = parts[:20] + [tunnel_parents, label, detailed_label]
+
             if len(row) != 23:
                 malformed_rows += 1
                 continue
 
             rows.append(row)
 
-    if malformed_rows > 0:
-        log.warning("%s: skipped %d malformed rows", scenario_name, malformed_rows)
+            if len(rows) >= chunk_rows:
+                all_cols = ZEEK_BASE_COLS + ["label", "detailed_label"]
+                chunk_df = pd.DataFrame(rows, columns=all_cols)
+                chunk_df["scenario"] = scenario_name
+                yield chunk_df, line_no, malformed_rows
+                rows = []
 
-    if not rows:
-        log.warning("No parsed rows in %s", filepath)
-        return pd.DataFrame()
-
-    all_cols = ZEEK_BASE_COLS + ["label", "detailed_label"]
-    df = pd.DataFrame(rows, columns=all_cols)
-    df["scenario"] = scenario_name
-
-    missing_required = REQUIRED_PARSED_COLS - set(df.columns)
-    if missing_required:
-        raise AssertionError(
-            f"{scenario_name}: missing required parsed columns: {sorted(missing_required)}"
-        )
+        # final remainder
+        if rows:
+            all_cols = ZEEK_BASE_COLS + ["label", "detailed_label"]
+            chunk_df = pd.DataFrame(rows, columns=all_cols)
+            chunk_df["scenario"] = scenario_name
+            yield chunk_df, line_no, malformed_rows
 
     if discovered_fields is not None and len(discovered_fields) < 21:
         log.warning(
             "%s: #fields header had only %d fields; expected at least 21",
-            scenario_name, len(discovered_fields)
+            scenario_name,
+            len(discovered_fields),
         )
 
-    if df.empty:
-        raise AssertionError(f"{scenario_name}: parsed DataFrame is unexpectedly empty.")
+    log.info(
+        "%s: finished reading %d lines, malformed=%d",
+        scenario_name,
+        line_no,
+        malformed_rows,
+    )
 
-    return df
 
-
-# Cleaning / feature engineering / labels
+# Cleaning / features / labels
 
 def clean_and_engineer(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Type-cast, clean unset markers, compute fit-free engineered features.
-    """
     df = df.copy()
 
     df = df.replace({"-": np.nan, "(empty)": np.nan})
@@ -315,11 +324,6 @@ def clean_and_engineer(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def assign_labels(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Assign:
-    - label_binary: 0 benign / 1 malicious
-    - label_phase: mapped from detailed_label
-    """
     df = df.copy()
 
     raw_label = (
@@ -342,9 +346,7 @@ def assign_labels(df: pd.DataFrame) -> pd.DataFrame:
 
     df["label"] = raw_label
     df["detailed_label"] = detailed
-
     df["label_binary"] = raw_label.apply(lambda x: 0 if x == "benign" else 1)
-
     df["label_phase"] = detailed.apply(
         lambda x: PHASE_MAP.get(x, "other_malicious" if x not in ("benign", "unknown") else x)
     )
@@ -375,10 +377,6 @@ def validate_per_scenario_df(df: pd.DataFrame, scenario_name: str) -> None:
 
 
 def stratified_sample_df(df: pd.DataFrame, frac: float, seed: int) -> pd.DataFrame:
-    """
-    Stratified by label_binary where possible.
-    Safe for tiny groups.
-    """
     if frac >= 1.0:
         return df.copy()
 
@@ -394,7 +392,6 @@ def stratified_sample_df(df: pd.DataFrame, frac: float, seed: int) -> pd.DataFra
         raise AssertionError("Sampling produced no rows.")
 
     out = pd.concat(sampled_parts, ignore_index=True)
-
     if out.empty:
         raise AssertionError("Sampling produced an empty dataframe.")
 
@@ -416,9 +413,7 @@ def validate_combined_df(combined: pd.DataFrame, discovered_scenarios: List[str]
     scenario_to_split_counts = combined.groupby("scenario")["split"].nunique()
     bad = scenario_to_split_counts[scenario_to_split_counts != 1]
     if not bad.empty:
-        raise AssertionError(
-            f"Some scenarios appear in multiple splits: {bad.to_dict()}"
-        )
+        raise AssertionError(f"Some scenarios appear in multiple splits: {bad.to_dict()}")
 
     discovered_set = set(discovered_scenarios)
     combined_set = set(combined["scenario"].unique())
@@ -429,22 +424,12 @@ def validate_combined_df(combined: pd.DataFrame, discovered_scenarios: List[str]
             f"Mismatch between discovered and combined scenarios. Missing={missing}, Extra={extra}"
         )
 
-    for split_name in ["train", "val", "test"]:
-        split_scenarios = combined.loc[combined["split"] == split_name, "scenario"].nunique()
-        if split_scenarios == 0:
-            log.warning("Split '%s' contains zero scenarios.", split_name)
-
     benign_by_split = combined.groupby("split")["label_binary"].apply(lambda s: int((s == 0).sum())).to_dict()
     if benign_by_split.get("train", 0) == 0:
         msg = "Train split contains zero benign rows. This is dangerous for binary IDS training."
         if strict_benign_train:
             raise AssertionError(msg)
         log.warning(msg)
-
-    scenario_sizes = combined.groupby("scenario").size()
-    zero_scenarios = [s for s in discovered_scenarios if s not in scenario_sizes.index]
-    if zero_scenarios:
-        raise AssertionError(f"Scenarios missing from combined dataset: {zero_scenarios}")
 
 
 def build_scenario_summary(combined: pd.DataFrame) -> pd.DataFrame:
@@ -481,7 +466,6 @@ def build_label_mapping_report(combined: pd.DataFrame) -> pd.DataFrame:
 
 def build_split_summary(combined: pd.DataFrame) -> dict:
     summary = {}
-
     for split_name in ["train", "val", "test"]:
         g = combined[combined["split"] == split_name]
         summary[split_name] = {
@@ -491,7 +475,6 @@ def build_split_summary(combined: pd.DataFrame) -> dict:
             "label_binary_counts": {str(k): int(v) for k, v in g["label_binary"].value_counts(dropna=False).to_dict().items()},
             "label_phase_counts": {str(k): int(v) for k, v in g["label_phase"].value_counts(dropna=False).to_dict().items()},
         }
-
     return summary
 
 
@@ -522,7 +505,8 @@ def build_data_quality_report(combined: pd.DataFrame) -> dict:
             "p100": safe_float(combined["duration"].quantile(1.00)),
         },
         "categorical_cardinality": {
-            col: int(combined[col].nunique(dropna=False)) for col in ZEEK_CATEGORICAL_COLS if col in combined.columns
+            col: int(combined[col].nunique(dropna=False))
+            for col in ZEEK_CATEGORICAL_COLS if col in combined.columns
         },
     }
     return report
@@ -555,35 +539,21 @@ def build_feature_info(combined: pd.DataFrame) -> dict:
 # File discovery
 
 def find_conn_logs(data_dir: str):
-    """
-    It walks the IoT-23 directory tree and return list of (scenario_name, filepath)
-    Supports both layouts:
-    1) .../SCENARIO/bro/conn.log.labeled
-    2) .../SCENARIO/device_name/bro/conn.log.labeled
-    """
     pattern = os.path.join(data_dir, "**", "bro", "conn.log.labeled")
     files = glob.glob(pattern, recursive=True)
 
     result = []
     for f in sorted(files):
         parts = Path(f).parts
-
         try:
             bro_idx = parts.index("bro")
-
             parent_1 = parts[bro_idx - 1] if bro_idx - 1 >= 0 else ""
             parent_2 = parts[bro_idx - 2] if bro_idx - 2 >= 0 else ""
 
-            # Normal case:
-            # .../CTU-IoT-Malware-Capture-34-1/bro/conn.log.labeled
             if parent_1.startswith("CTU-"):
                 scenario = parent_1
-
-            # Nested honeypot/device case:
-            # .../CTU-Honeypot-Capture-7-1/Somfy-01/bro/conn.log.labeled
             elif parent_2.startswith("CTU-"):
                 scenario = parent_2
-
             else:
                 scenario = Path(f).parent.parent.name
 
@@ -595,14 +565,118 @@ def find_conn_logs(data_dir: str):
     return result
 
 
+# Chunked scenario processing
+
+def process_scenario_to_chunks(
+    scenario_name: str,
+    filepath: str,
+    chunks_dir: Path,
+    sample_frac: float,
+    seed: int,
+    chunk_rows: int,
+) -> List[Path]:
+    """
+    Parse one scenario in chunks and save chunk parquet files.
+    Returns list of chunk parquet paths.
+    """
+    chunk_paths: List[Path] = []
+    chunk_idx = 0
+    total_rows_saved = 0
+
+    for chunk_df, line_no, malformed_rows in iter_conn_log_chunks(
+        filepath=filepath,
+        scenario_name=scenario_name,
+        chunk_rows=chunk_rows,
+    ):
+        if chunk_df.empty:
+            continue
+
+        chunk_df = clean_and_engineer(chunk_df)
+        chunk_df = assign_labels(chunk_df)
+
+        if sample_frac < 1.0:
+            before_n = len(chunk_df)
+            chunk_df = stratified_sample_df(chunk_df, frac=sample_frac, seed=seed)
+            log.info(
+                "Sampled chunk for %s: %d -> %d rows",
+                scenario_name,
+                before_n,
+                len(chunk_df),
+            )
+
+        if chunk_df.empty:
+            del chunk_df
+            gc.collect()
+            continue
+
+        chunk_df = chunk_df.sort_values("ts", na_position="last").reset_index(drop=True)
+        chunk_df["split"] = get_split(scenario_name)
+        validate_per_scenario_df(chunk_df, scenario_name)
+
+        available_cols = [c for c in FINAL_FEATURE_COLS if c in chunk_df.columns]
+        chunk_df = chunk_df[available_cols]
+
+        chunk_path = chunks_dir / f"{scenario_name}_part{chunk_idx:04d}.parquet"
+        chunk_df.to_parquet(chunk_path, index=False)
+        chunk_paths.append(chunk_path)
+
+        total_rows_saved += len(chunk_df)
+        log.info(
+            "%s: saved chunk %s (%d rows, total saved=%d)",
+            scenario_name,
+            chunk_path.name,
+            len(chunk_df),
+            total_rows_saved,
+        )
+
+        chunk_idx += 1
+        del chunk_df
+        gc.collect()
+
+    if not chunk_paths:
+        raise AssertionError(f"{scenario_name}: no chunk parquet files were produced.")
+
+    log.info("%s: completed chunk processing with %d chunk files", scenario_name, len(chunk_paths))
+    return chunk_paths
+
+
+def combine_scenario_chunks_to_final(
+    scenario_name: str,
+    chunk_paths: List[Path],
+    scenario_out_dir: Path,
+) -> Path:
+    """
+    Combine per-scenario chunk parquet files into one final scenario parquet.
+    """
+    parts = []
+    for p in sorted(chunk_paths):
+        part = pd.read_parquet(p)
+        parts.append(part)
+
+    scenario_df = pd.concat(parts, ignore_index=True)
+    del parts
+    gc.collect()
+
+    scenario_path = scenario_out_dir / f"{scenario_name}.parquet"
+    scenario_df.to_parquet(scenario_path, index=False)
+
+    log.info("Saved final scenario parquet: %s (%d rows)", scenario_path.name, len(scenario_df))
+
+    del scenario_df
+    gc.collect()
+
+    return scenario_path
+
+
 # Main
 
 def main():
-    parser = argparse.ArgumentParser(description="IoT-23 preprocessing pipeline with validation and audit reports")
+    parser = argparse.ArgumentParser(description="IoT-23 preprocessing pipeline with chunked processing")
     parser.add_argument("--data_dir", required=True, help="Root directory of IoT-23 dataset")
     parser.add_argument("--out_dir", required=True, help="Output directory")
     parser.add_argument("--sample", type=float, default=1.0, help="Fraction of rows to keep per scenario")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--chunk_rows", type=int, default=500_000, help="Rows per parsed chunk before writing parquet")
     parser.add_argument(
         "--strict_benign_train",
         action="store_true",
@@ -618,6 +692,11 @@ def main():
     out_path = Path(args.out_dir) / "iot23"
     out_path.mkdir(parents=True, exist_ok=True)
 
+    chunks_dir = out_path / "processed_chunks"
+    scenario_out_dir = out_path / "processed_scenarios"
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    scenario_out_dir.mkdir(parents=True, exist_ok=True)
+
     log_files = find_conn_logs(args.data_dir)
     if not log_files:
         raise FileNotFoundError(f"No conn.log.labeled files found under: {args.data_dir}")
@@ -628,55 +707,63 @@ def main():
 
     log.info("Found %d scenario files", len(log_files))
 
-    all_dfs = []
-    label_stats = []
+    # Pass 1: chunk-process each scenario and combine chunk files to final
+
+    scenario_paths: List[Path] = []
 
     for scenario_name, filepath in log_files:
         log.info("Parsing %s ...", scenario_name)
 
-        df = parse_conn_log_labeled(filepath, scenario_name)
-        if df.empty:
-            log.warning("%s produced no rows after parsing; skipping.", scenario_name)
-            continue
+        chunk_paths = process_scenario_to_chunks(
+            scenario_name=scenario_name,
+            filepath=filepath,
+            chunks_dir=chunks_dir,
+            sample_frac=args.sample,
+            seed=args.seed,
+            chunk_rows=args.chunk_rows,
+        )
 
-        df = clean_and_engineer(df)
-        df = assign_labels(df)
+        scenario_path = combine_scenario_chunks_to_final(
+            scenario_name=scenario_name,
+            chunk_paths=chunk_paths,
+            scenario_out_dir=scenario_out_dir,
+        )
+        scenario_paths.append(scenario_path)
 
-        if args.sample < 1.0:
-            before_n = len(df)
-            df = stratified_sample_df(df, frac=args.sample, seed=args.seed)
-            log.info("Sampled %s: %d -> %d rows", scenario_name, before_n, len(df))
+        for p in chunk_paths:
+            try:
+                p.unlink()
+            except OSError:
+                log.warning("Could not delete chunk file %s", p)
 
-        if df.empty:
-            raise AssertionError(f"{scenario_name}: empty after sampling.")
+        gc.collect()
 
-        df = df.sort_values("ts", na_position="last").reset_index(drop=True)
-        df["split"] = get_split(scenario_name)
+    if not scenario_paths:
+        raise AssertionError("No final scenario parquet files were produced.")
 
-        validate_per_scenario_df(df, scenario_name)
+    # Pass 2: combine final scenario parquet files
+
+    log.info("Combining final scenario parquet files ...")
+    combined_parts = []
+    label_stats_frames = []
+
+    for p in sorted(scenario_paths):
+        log.info("Loading %s for final combine", p.name)
+        part = pd.read_parquet(p)
+        combined_parts.append(part)
 
         stats = (
-            df.groupby(["scenario", "split", "label", "detailed_label", "label_binary", "label_phase"])
+            part.groupby(["scenario", "split", "label", "detailed_label", "label_binary", "label_phase"])
             .size()
             .reset_index(name="count")
         )
-        label_stats.append(stats)
-        all_dfs.append(df)
+        label_stats_frames.append(stats)
 
-    if not all_dfs:
-        raise AssertionError("No scenario dataframes were produced. Check dataset path and parser assumptions.")
+    combined = pd.concat(combined_parts, ignore_index=True)
+    del combined_parts
+    gc.collect()
 
-    combined = pd.concat(all_dfs, ignore_index=True)
-
-    feature_cols = (
-        ["ts", "scenario", "split"] +
-        ZEEK_CATEGORICAL_COLS +
-        ZEEK_NUMERIC_COLS +
-        ENGINEERED_COLS +
-        ["label", "detailed_label", "label_binary", "label_phase"]
-    )
-    feature_cols = [c for c in feature_cols if c in combined.columns]
-    combined = combined[feature_cols]
+    combined = combined[[c for c in FINAL_FEATURE_COLS if c in combined.columns]]
 
     validate_combined_df(
         combined=combined,
@@ -694,7 +781,7 @@ def main():
     log.info("Benign by split:\n%s", benign_by_split.to_string())
     log.info("Malicious by split:\n%s", malicious_by_split.to_string())
 
-    # Save primary datasets
+    # save final datasets
     combined.to_parquet(out_path / "all_flows.parquet", index=False)
     log.info("Saved all_flows.parquet")
 
@@ -703,12 +790,12 @@ def main():
         subset.to_parquet(out_path / f"{split_name}.parquet", index=False)
         log.info("Saved %s.parquet (%d rows)", split_name, len(subset))
 
-    # Save label stats
-    label_df = pd.concat(label_stats, ignore_index=True)
+    # label stats
+    label_df = pd.concat(label_stats_frames, ignore_index=True)
     label_df.to_csv(out_path / "label_stats.csv", index=False)
     log.info("Saved label_stats.csv")
 
-    # Save audit outputs
+    # audit outputs
     scenario_summary = build_scenario_summary(combined)
     scenario_summary.to_csv(out_path / "scenario_summary.csv", index=False)
     log.info("Saved scenario_summary.csv")
@@ -738,6 +825,7 @@ def main():
     print(f"  Benign           : {(combined['label_binary'] == 0).sum():,}")
     print(f"  Malicious        : {(combined['label_binary'] == 1).sum():,}")
     print("───────────────────────────────────────────────────\n")
+
     log.info("Done. Output in: %s", out_path)
 
 
