@@ -59,3 +59,49 @@ python data_preprocessing/plot_feature_stability_full.py `
 
 Running the preprocessing on the full dataset:
 python data_preprocessing/data_prep_iot23.py --data_dir "Datasets/IoT23/iot_23_datasets_full/opt/Malware-Project/BigDataset/IoTScenarios" --out_dir "Datasets/IoT23/processed_full" --sample 1.0 --seed 42
+
+
+Running data prep unsw dataset 
+python full_dataset_preprocessing/baseline_improved_UNSWNB15/data_prep_unsw.py `
+  --train_path "Datasets\UNSW-NB15\UNSW-NB15 dataset\CSV Files\Training and Testing Sets\UNSW_NB15_training-set.csv" `
+  --test_path "Datasets\UNSW-NB15\UNSW-NB15 dataset\CSV Files\Training and Testing Sets\UNSW_NB15_testing-set.csv" `
+  --out_dir "Datasets\UNSW-NB15\outputs\baseline"
+
+
+Running xgb unsw dataset
+python full_dataset_preprocessing/baseline_improved_UNSWNB15/train_xgb_unsw.py `
+  --train_path "Datasets\UNSW-NB15\UNSW-NB15 dataset\CSV Files\Training and Testing Sets\UNSW_NB15_training-set.csv" `
+  --test_path "Datasets\UNSW-NB15\UNSW-NB15 dataset\CSV Files\Training and Testing Sets\UNSW_NB15_testing-set.csv" `
+  --out_dir "Datasets\UNSW-NB15\outputs\baseline\xgb_baseline" `
+  --target_col label `
+  --seed 42
+
+Running rf unsw dataset
+python full_dataset_preprocessing/baseline_improved_UNSWNB15/train_rf_unsw.py `
+  --train_path "Datasets\UNSW-NB15\UNSW-NB15 dataset\CSV Files\Training and Testing Sets\UNSW_NB15_training-set.csv" `
+  --test_path "Datasets\UNSW-NB15\UNSW-NB15 dataset\CSV Files\Training and Testing Sets\UNSW_NB15_testing-set.csv" `
+  --out_dir "Datasets\UNSW-NB15\outputs\baseline\rf_baseline" `
+  --target_col label `
+  --seed 42
+
+Running Leave One Attack Out XGB unsw dataset
+python full_dataset_preprocessing/baseline_improved_UNSWNB15/leave_one_attack_type_out_xgb.py `
+  --train_path "Datasets\UNSW-NB15\UNSW-NB15 dataset\CSV Files\Training and Testing Sets\UNSW_NB15_training-set.csv" `
+  --test_path "Datasets\UNSW-NB15\UNSW-NB15 dataset\CSV Files\Training and Testing Sets\UNSW_NB15_testing-set.csv" `
+  --out_dir "Datasets\UNSW-NB15\outputs\leave_one_attack_type_out\xgb" `
+  --target_col label `
+  --seed 42
+
+Running Leave One Attack Out RF unsw dataset
+python full_dataset_preprocessing/baseline_improved_UNSWNB15/leave_one_attack_type_out_rf.py `
+  --train_path "Datasets\UNSW-NB15\UNSW-NB15 dataset\CSV Files\Training and Testing Sets\UNSW_NB15_training-set.csv" `
+  --test_path "Datasets\UNSW-NB15\UNSW-NB15 dataset\CSV Files\Training and Testing Sets\UNSW_NB15_testing-set.csv" `
+  --out_dir "Datasets\UNSW-NB15\outputs\leave_one_attack_type_out\rf" `
+  --target_col label `
+  --seed 42
+
+Running Leave One Attack Out conclusions & analysis !
+python full_dataset_preprocessing/baseline_improved_UNSWNB15/analyze_leave_one_attack_type_out.py `
+  --rf_dir "Datasets\UNSW-NB15\outputs\leave_one_attack_type_out\rf" `
+  --xgb_dir "Datasets\UNSW-NB15\outputs\leave_one_attack_type_out\xgb" `
+  --out_dir "Datasets\UNSW-NB15\outputs\leave_one_attack_type_out\analysis"
