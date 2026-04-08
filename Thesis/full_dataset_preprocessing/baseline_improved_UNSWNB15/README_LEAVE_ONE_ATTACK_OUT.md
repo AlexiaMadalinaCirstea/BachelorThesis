@@ -8,3 +8,9 @@ Instead, I will use this a **Leave-One-Attack-Type-Out** protocol. For each fold
 
 This setup evaluates how well a model generalizes to an unseen attack type and serves as an UNSW-NB15 analogue to out-of-distribution evaluation. I think it is the closest I can simulate a "LOSO" on this dataset!
 
+Because each held-out attack type defines one evaluation fold, the same fold structure can also be reused for:
+- feature stability analysis across held-out attack-type folds
+- transfer-utility analysis for features that remain important when the attack family changes
+
+Conceptually this is different from IoT-23 scenario-level stability but it still measures whether a feature's contribution is robust under distribution shift in UNSW-NB15.
+

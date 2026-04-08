@@ -3,6 +3,7 @@ import json
 import argparse
 import numpy as np
 import pandas as pd
+import joblib
 
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -61,7 +62,7 @@ def build_features(train_df: pd.DataFrame, test_df: pd.DataFrame, target_col: st
     return X_train, X_test, y_train, y_test, categorical_cols, numeric_cols
 
 
-def make_pipeline(categorical_cols, numeric_cols, seed: int):
+def make_pipeline(categorical_cols, numeric_cols, seed: int, n_jobs: int):
     try:
         encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
     except TypeError:
@@ -85,13 +86,33 @@ def make_pipeline(categorical_cols, numeric_cols, seed: int):
         objective="binary:logistic",
         eval_metric="logloss",
         random_state=seed,
-        n_jobs=-1,
+        n_jobs=n_jobs,
     )
 
     return Pipeline([
         ("preprocessor", preprocessor),
         ("model", model),
     ])
+
+
+def extract_feature_importances(pipeline: Pipeline) -> pd.DataFrame:
+    preprocessor = pipeline.named_steps["preprocessor"]
+    model = pipeline.named_steps["model"]
+
+    feature_names = preprocessor.get_feature_names_out()
+    importances = getattr(model, "feature_importances_", None)
+
+    if importances is None:
+        raise AttributeError(f"Model does not expose feature_importances_: {type(model)}")
+    if len(feature_names) != len(importances):
+        raise ValueError(
+            f"Feature name / importance length mismatch: {len(feature_names)} vs {len(importances)}"
+        )
+
+    return pd.DataFrame({
+        "feature": [str(name) for name in feature_names],
+        "importance": np.asarray(importances, dtype=float),
+    })
 
 
 def compute_metrics(y_true, y_pred):
@@ -108,7 +129,16 @@ def compute_metrics(y_true, y_pred):
     }
 
 
-def save_fold_outputs(out_dir: str, held_out_attack: str, y_test, y_pred, y_score, metrics):
+def save_fold_outputs(
+    out_dir: str,
+    held_out_attack: str,
+    y_test,
+    y_pred,
+    y_score,
+    metrics,
+    pipeline: Pipeline,
+    feature_importances_df: pd.DataFrame,
+):
     fold_dir = os.path.join(out_dir, held_out_attack.replace("/", "_"))
     os.makedirs(fold_dir, exist_ok=True)
 
@@ -131,6 +161,9 @@ def save_fold_outputs(out_dir: str, held_out_attack: str, y_test, y_pred, y_scor
         for k, v in metrics.items():
             f.write(f"{k}: {v}\n")
 
+    joblib.dump(pipeline, os.path.join(fold_dir, "model.joblib"))
+    feature_importances_df.to_csv(os.path.join(fold_dir, "fold_feature_importances.csv"), index=False)
+
 
 def main():
     parser = argparse.ArgumentParser(description="UNSW-NB15 Leave-One-Attack-Type-Out with XGBoost")
@@ -139,6 +172,7 @@ def main():
     parser.add_argument("--out_dir", required=True)
     parser.add_argument("--target_col", default="label")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--n_jobs", type=int, default=1)
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -159,11 +193,12 @@ def main():
             train_df, test_df, args.target_col
         )
 
-        pipeline = make_pipeline(categorical_cols, numeric_cols, args.seed)
+        pipeline = make_pipeline(categorical_cols, numeric_cols, args.seed, args.n_jobs)
         pipeline.fit(X_train, y_train)
 
         y_pred = pipeline.predict(X_test)
         y_score = pipeline.predict_proba(X_test)[:, 1]
+        feature_importances_df = extract_feature_importances(pipeline)
 
         metrics = compute_metrics(y_test, y_pred)
         metrics["held_out_attack"] = attack
@@ -171,7 +206,16 @@ def main():
         metrics["test_size"] = int(len(test_df))
         metrics["held_out_attack_support"] = int((test_df["attack_cat"] == attack).sum())
 
-        save_fold_outputs(args.out_dir, attack, y_test, y_pred, y_score, metrics)
+        save_fold_outputs(
+            args.out_dir,
+            attack,
+            y_test,
+            y_pred,
+            y_score,
+            metrics,
+            pipeline,
+            feature_importances_df,
+        )
         all_results.append(metrics)
 
         print(json.dumps(metrics, indent=2))
