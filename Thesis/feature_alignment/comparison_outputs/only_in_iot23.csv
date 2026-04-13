@@ -1,0 +1,14 @@
+only_in_iot23
+bytes_ratio
+conn_state
+duration
+missed_bytes
+orig_bytes
+orig_bytes_per_pkt
+orig_ip_bytes
+orig_pkts
+pkts_ratio
+resp_bytes
+resp_bytes_per_pkt
+resp_ip_bytes
+resp_pkts
