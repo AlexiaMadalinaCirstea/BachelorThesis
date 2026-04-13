@@ -1,36 +1,28 @@
-# EXPORTS RAW FEATURES FOR FEATURE ALIGNMENT!
-
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
 
-import pyarrow.parquet as pq
+import pandas as pd
 
 
 DEFAULT_NON_FEATURE_COLS = {
+    "id",
+    "attack_cat",
     "label",
-    "label_binary",
-    "label_multiphase",
-    "detailed_label",
-    "label_phase",
-    "scenario_id",
-    "scenario",
     "split",
-    "ts",
-    "uid",
 }
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Export raw IoT-23 feature columns from a processed parquet split."
+        description="Export raw UNSW-NB15 feature columns from a processed or official CSV split."
     )
     parser.add_argument(
         "--train_path",
-        default="Datasets/IoT23/processed_test_sample/iot23/train.parquet",
-        help="Path to the processed IoT-23 train parquet file.",
+        default="Datasets/UNSW-NB15/UNSW-NB15 dataset/CSV Files/Training and Testing Sets/UNSW_NB15_training-set.csv",
+        help="Path to the UNSW-NB15 train CSV file.",
     )
     parser.add_argument(
         "--out_dir",
@@ -39,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--out_name",
-        default="iot23_features.json",
+        default="unsw_features.json",
         help="Output JSON filename.",
     )
     return parser.parse_args()
@@ -53,8 +45,8 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / args.out_name
 
-    schema = pq.read_schema(train_path)
-    columns = list(schema.names)
+    df = pd.read_csv(train_path, nrows=1)
+    columns = list(df.columns)
 
     feature_cols = [col for col in columns if col not in DEFAULT_NON_FEATURE_COLS]
 
