@@ -5,3 +5,9 @@ __pycache__/
 Datasets/
 *.parquet
 *.log
+
+cross_domain_shift/outputs/
+cross_domain_shift/outputs_*/
+cross_domain_shift/figures/
+cross_domain_shift/combined_run_summary.csv
+cross_domain_shift/combined_run_notes.csv
