@@ -1,0 +1,93 @@
+feature,importance,run_folder,run_id,direction,direction_label,model,model_label,include_review_features,feature_count,variant
+flow_duration,0.4847944599715502,outputs,R1,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+source_to_destination_packets,0.4001701973412731,outputs,R1,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+protocol,0.103427029756559,outputs,R1,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+source_mean_bytes_per_packet,0.0043179114810869,outputs,R1,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+source_to_destination_bytes,0.0036476031746849,outputs,R1,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_to_source_packets,0.0031823754223519,outputs,R1,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_mean_bytes_per_packet,0.000173525069906,outputs,R1,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+service,0.000153397155032,outputs,R1,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_to_source_bytes,0.0001335006275556,outputs,R1,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+flow_duration,0.1870773911981227,outputs,R1,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_mean_bytes_per_packet,0.1798544044498906,outputs,R1,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+source_to_destination_bytes,0.150644269510797,outputs,R1,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_to_source_bytes,0.1364509595858127,outputs,R1,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+source_mean_bytes_per_packet,0.1268369288403648,outputs,R1,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_to_source_packets,0.1037455269568092,outputs,R1,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+source_to_destination_packets,0.0553376750796768,outputs,R1,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+service,0.0390847625783956,outputs,R1,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+protocol,0.0209680818001302,outputs,R1,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+flow_duration,0.4856489494884547,outputs_2,R2,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+source_to_destination_packets,0.4058299026554151,outputs_2,R2,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+protocol,0.0932025828407799,outputs_2,R2,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_to_source_packets,0.0067379474035049,outputs_2,R2,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+source_mean_bytes_per_packet,0.0045826794205575,outputs_2,R2,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+source_to_destination_bytes,0.003676564832458,outputs_2,R2,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_to_source_bytes,0.0001439959609147,outputs_2,R2,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+service,0.000113419436879,outputs_2,R2,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_mean_bytes_per_packet,6.395796103594712e-05,outputs_2,R2,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,False,9,Accepted 9-feature subset
+flow_duration,0.187976096926019,outputs_2,R2,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_mean_bytes_per_packet,0.1854236186121489,outputs_2,R2,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+source_to_destination_bytes,0.1412214185147321,outputs_2,R2,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_to_source_bytes,0.129839749277149,outputs_2,R2,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+source_mean_bytes_per_packet,0.1292032613834329,outputs_2,R2,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+destination_to_source_packets,0.1090135755233574,outputs_2,R2,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+source_to_destination_packets,0.0597542970339263,outputs_2,R2,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+service,0.0377088786612888,outputs_2,R2,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+protocol,0.0198591040679451,outputs_2,R2,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,False,9,Accepted 9-feature subset
+flow_duration,0.40942717,outputs_3,R3,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+protocol,0.28640518,outputs_3,R3,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_to_destination_packets,0.2588236,outputs_3,R3,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_to_destination_bytes,0.021745654,outputs_3,R3,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_to_source_packets,0.016192093,outputs_3,R3,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_mean_bytes_per_packet,0.00740629,outputs_3,R3,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+service,0.0,outputs_3,R3,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_to_source_bytes,0.0,outputs_3,R3,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_mean_bytes_per_packet,0.0,outputs_3,R3,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_mean_bytes_per_packet,0.3536308,outputs_3,R3,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+flow_duration,0.12965101,outputs_3,R3,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_to_source_bytes,0.124314874,outputs_3,R3,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_mean_bytes_per_packet,0.09803705,outputs_3,R3,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+service,0.08562259,outputs_3,R3,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_to_destination_bytes,0.083254255,outputs_3,R3,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+protocol,0.05217554,outputs_3,R3,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_to_destination_packets,0.0431745,outputs_3,R3,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_to_source_packets,0.03013935,outputs_3,R3,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+flow_duration,0.4569154951870443,outputs_4,R4,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,True,10,Accepted subset + connection_state
+source_to_destination_packets,0.4190958998001559,outputs_4,R4,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,True,10,Accepted subset + connection_state
+protocol,0.0908133198944933,outputs_4,R4,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,True,10,Accepted subset + connection_state
+connection_state,0.0211924485002351,outputs_4,R4,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,True,10,Accepted subset + connection_state
+destination_to_source_packets,0.0045370627098372,outputs_4,R4,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,True,10,Accepted subset + connection_state
+source_mean_bytes_per_packet,0.0037342453278338,outputs_4,R4,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,True,10,Accepted subset + connection_state
+source_to_destination_bytes,0.0033226190411477,outputs_4,R4,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,True,10,Accepted subset + connection_state
+destination_to_source_bytes,0.0001692896094696,outputs_4,R4,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,True,10,Accepted subset + connection_state
+destination_mean_bytes_per_packet,0.0001327476852301,outputs_4,R4,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,True,10,Accepted subset + connection_state
+service,8.687224455271447e-05,outputs_4,R4,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,rf,Random Forest,True,10,Accepted subset + connection_state
+destination_mean_bytes_per_packet,0.1666989405933796,outputs_4,R4,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,True,10,Accepted subset + connection_state
+flow_duration,0.1464675085176587,outputs_4,R4,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,True,10,Accepted subset + connection_state
+destination_to_source_bytes,0.142593308747125,outputs_4,R4,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,True,10,Accepted subset + connection_state
+source_to_destination_bytes,0.1407564280591501,outputs_4,R4,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,True,10,Accepted subset + connection_state
+source_mean_bytes_per_packet,0.1273309694381885,outputs_4,R4,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,True,10,Accepted subset + connection_state
+destination_to_source_packets,0.0957591946162392,outputs_4,R4,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,True,10,Accepted subset + connection_state
+connection_state,0.060444757225679,outputs_4,R4,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,True,10,Accepted subset + connection_state
+source_to_destination_packets,0.0569180665783207,outputs_4,R4,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,True,10,Accepted subset + connection_state
+service,0.0363565809372676,outputs_4,R4,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,True,10,Accepted subset + connection_state
+protocol,0.0266742452869912,outputs_4,R4,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,rf,Random Forest,True,10,Accepted subset + connection_state
+flow_duration,0.38358662,outputs_5,R5,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_to_destination_packets,0.28649282,outputs_5,R5,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+protocol,0.2510292,outputs_5,R5,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_to_destination_bytes,0.023712268,outputs_5,R5,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_to_source_bytes,0.016655758,outputs_5,R5,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_mean_bytes_per_packet,0.014853712,outputs_5,R5,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_to_source_packets,0.014132838,outputs_5,R5,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+service,0.009536839,outputs_5,R5,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_mean_bytes_per_packet,0.0,outputs_5,R5,iot23_train_to_unsw_test,IoT-23 -> UNSW-NB15,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_mean_bytes_per_packet,0.36802927,outputs_5,R5,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+flow_duration,0.13692263,outputs_5,R5,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_to_source_bytes,0.12188616,outputs_5,R5,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_mean_bytes_per_packet,0.093627684,outputs_5,R5,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_to_destination_bytes,0.080868855,outputs_5,R5,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+service,0.0766696,outputs_5,R5,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+protocol,0.05513631,outputs_5,R5,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+source_to_destination_packets,0.03596042,outputs_5,R5,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
+destination_to_source_packets,0.030899033,outputs_5,R5,unsw_train_to_iot23_test,UNSW-NB15 -> IoT-23,xgb,XGBoost,False,9,Accepted 9-feature subset
