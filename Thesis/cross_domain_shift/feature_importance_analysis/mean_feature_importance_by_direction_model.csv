@@ -1,0 +1,39 @@
+feature,direction_label,model_label,mean_importance
+flow_duration,IoT-23 -> UNSW-NB15,Random Forest,0.4757863015490164
+source_to_destination_packets,IoT-23 -> UNSW-NB15,Random Forest,0.4083653332656147
+protocol,IoT-23 -> UNSW-NB15,Random Forest,0.09581431083061072
+connection_state,IoT-23 -> UNSW-NB15,Random Forest,0.0211924485002351
+destination_to_source_packets,IoT-23 -> UNSW-NB15,Random Forest,0.0048191285118979995
+source_mean_bytes_per_packet,IoT-23 -> UNSW-NB15,Random Forest,0.004211612076492733
+source_to_destination_bytes,IoT-23 -> UNSW-NB15,Random Forest,0.0035489290160968666
+destination_to_source_bytes,IoT-23 -> UNSW-NB15,Random Forest,0.00014892873264663332
+destination_mean_bytes_per_packet,IoT-23 -> UNSW-NB15,Random Forest,0.0001234102387240157
+service,IoT-23 -> UNSW-NB15,Random Forest,0.00011789627882123816
+flow_duration,IoT-23 -> UNSW-NB15,XGBoost,0.396506895
+source_to_destination_packets,IoT-23 -> UNSW-NB15,XGBoost,0.27265821
+protocol,IoT-23 -> UNSW-NB15,XGBoost,0.26871719
+source_to_destination_bytes,IoT-23 -> UNSW-NB15,XGBoost,0.022728961
+destination_to_source_packets,IoT-23 -> UNSW-NB15,XGBoost,0.0151624655
+source_mean_bytes_per_packet,IoT-23 -> UNSW-NB15,XGBoost,0.011130001
+destination_to_source_bytes,IoT-23 -> UNSW-NB15,XGBoost,0.008327879
+service,IoT-23 -> UNSW-NB15,XGBoost,0.0047684195
+destination_mean_bytes_per_packet,IoT-23 -> UNSW-NB15,XGBoost,0.0
+destination_mean_bytes_per_packet,UNSW-NB15 -> IoT-23,Random Forest,0.17732565455180638
+flow_duration,UNSW-NB15 -> IoT-23,Random Forest,0.17384033221393347
+source_to_destination_bytes,UNSW-NB15 -> IoT-23,Random Forest,0.1442073720282264
+destination_to_source_bytes,UNSW-NB15 -> IoT-23,Random Forest,0.13629467253669555
+source_mean_bytes_per_packet,UNSW-NB15 -> IoT-23,Random Forest,0.1277903865539954
+destination_to_source_packets,UNSW-NB15 -> IoT-23,Random Forest,0.10283943236546861
+connection_state,UNSW-NB15 -> IoT-23,Random Forest,0.060444757225679
+source_to_destination_packets,UNSW-NB15 -> IoT-23,Random Forest,0.0573366795639746
+service,UNSW-NB15 -> IoT-23,Random Forest,0.03771674072565067
+protocol,UNSW-NB15 -> IoT-23,Random Forest,0.022500477051688835
+destination_mean_bytes_per_packet,UNSW-NB15 -> IoT-23,XGBoost,0.360830035
+flow_duration,UNSW-NB15 -> IoT-23,XGBoost,0.13328682
+destination_to_source_bytes,UNSW-NB15 -> IoT-23,XGBoost,0.12310051699999999
+source_mean_bytes_per_packet,UNSW-NB15 -> IoT-23,XGBoost,0.095832367
+source_to_destination_bytes,UNSW-NB15 -> IoT-23,XGBoost,0.08206155500000001
+service,UNSW-NB15 -> IoT-23,XGBoost,0.081146095
+protocol,UNSW-NB15 -> IoT-23,XGBoost,0.053655925
+source_to_destination_packets,UNSW-NB15 -> IoT-23,XGBoost,0.03956746
+destination_to_source_packets,UNSW-NB15 -> IoT-23,XGBoost,0.0305191915
