@@ -11,3 +11,10 @@ cross_domain_shift/outputs_*/
 cross_domain_shift/figures/
 cross_domain_shift/combined_run_summary.csv
 cross_domain_shift/combined_run_notes.csv
+cross_domain_shift/feature_importance_analysis/
+
+transfer_learning/outputs/
+transfer_learning/outputs_*/
+transfer_learning/outputs_balanced/
+transfer_learning/outputs_balanced_probs/
+transfer_learning/threshold_analysis/

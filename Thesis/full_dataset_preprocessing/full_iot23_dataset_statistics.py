@@ -305,10 +305,12 @@ def plot_stacked_bar(
 ) -> None:
     fig, ax = plt.subplots(figsize=figsize)
     bottom = np.zeros(len(df), dtype=float)
+    cmap = plt.get_cmap("nipy_spectral", len(df.columns))
+    colors = [cmap(i) for i in range(len(df.columns))]
 
-    for col in df.columns:
+    for i, col in enumerate(df.columns):
         vals = df[col].to_numpy(dtype=float)
-        ax.bar(df.index, vals, bottom=bottom, label=col)
+        ax.bar(df.index, vals, bottom=bottom, label=col, color=colors[i])
         bottom += vals
 
     ax.set_title(title)
