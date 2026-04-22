@@ -1,0 +1,3 @@
+direction,best_target_only_macro_f1,best_transfer_macro_f1,best_macro_f1_gain_vs_target_only,target_fractions_with_positive_macro_f1_gain,overall_interpretation
+IoT-23 -> UNSW-NB15,0.9068324549322756,0.90975897713359,0.02070516049661064,0.05,transfer helps under limited target data
+UNSW-NB15 -> IoT-23,0.4109036740049837,0.4109036740049837,7.076866715360897e-05,none,transfer does not meaningfully improve target-only
