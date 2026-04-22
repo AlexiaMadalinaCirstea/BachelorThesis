@@ -18,3 +18,7 @@ transfer_learning/outputs_*/
 transfer_learning/outputs_balanced/
 transfer_learning/outputs_balanced_probs/
 transfer_learning/threshold_analysis/
+transfer_learning/figures/
+transfer_learning/final_tables/
+transfer_learning/seed_stability/
+transfer_learning/more_figures/
