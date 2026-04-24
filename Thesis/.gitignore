@@ -22,3 +22,10 @@ transfer_learning/figures/
 transfer_learning/final_tables/
 transfer_learning/seed_stability/
 transfer_learning/more_figures/
+
+# Early detection generated experiment outputs
+early_detection/in_domain_early_detection/outputs_*/
+early_detection/in_domain_early_detection/outputs_iot23_*/
+early_detection/in_domain_early_detection/outputs_unsw_*/
+early_detection/cross_domain_early_detection/outputs_*/
+early_detection/transfer_learning_based_early_detection/outputs_*/
