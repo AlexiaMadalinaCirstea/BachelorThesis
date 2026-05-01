@@ -28,6 +28,8 @@ transfer_learning/hypothesis/combined_direction_analysis/
 
 # Early detection generated experiment outputs
 early_detection/in_domain_early_detection/outputs_*/
+early_detection/in_domain_early_detection/analysis_outputs/
+early_detection/in_domain_early_detection/fixed_analyzer/
 early_detection/in_domain_early_detection/outputs_iot23_*/
 early_detection/in_domain_early_detection/outputs_unsw_*/
 early_detection/cross_domain_early_detection/outputs_*/

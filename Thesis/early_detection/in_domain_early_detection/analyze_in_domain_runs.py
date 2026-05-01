@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--out_dir",
-        default="early_detection/in_domain_early_detection/analysis_outputs",
+        default="early_detection/in_domain_early_detection/fixed_analyzer",
         help="Directory for merged CSVs and plots.",
     )
     return parser.parse_args()
@@ -170,6 +170,21 @@ def collect_run_data(runs_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Dat
     return summary_all_df, first_tp_all_df, inventory_df
 
 
+def build_fraction_grid_table(summary_all_df: pd.DataFrame) -> pd.DataFrame:
+    test_df = summary_all_df[summary_all_df["split"] == "test"].copy()
+    if test_df.empty:
+        raise AssertionError("No test rows available to build fraction-grid table.")
+
+    grouped = (
+        test_df.groupby(["dataset", "model", "run_name", "exp_number"], as_index=False)["fraction"]
+        .agg(
+            fraction_count="nunique",
+            max_fraction="max",
+        )
+    )
+    return grouped
+
+
 def select_best_runs(summary_all_df: pd.DataFrame) -> pd.DataFrame:
     test_full = summary_all_df[
         (summary_all_df["split"] == "test") & (summary_all_df["fraction"] == 1.0)
@@ -177,9 +192,16 @@ def select_best_runs(summary_all_df: pd.DataFrame) -> pd.DataFrame:
     if test_full.empty:
         raise AssertionError("No test fraction=1.0 rows found for best-run selection.")
 
+    fraction_grid_df = build_fraction_grid_table(summary_all_df)
+    test_full = test_full.merge(
+        fraction_grid_df,
+        on=["dataset", "model", "run_name", "exp_number"],
+        how="left",
+    )
+
     ranking = test_full.sort_values(
-        ["dataset", "model", "f1_attack", "exp_number"],
-        ascending=[True, True, False, False],
+        ["dataset", "model", "fraction_count", "max_fraction", "f1_attack", "exp_number"],
+        ascending=[True, True, False, False, False, False],
     )
     best_per_group = ranking.groupby(["dataset", "model"], as_index=False).first()
     best_run_names = set(best_per_group["run_name"].tolist())
@@ -323,8 +345,8 @@ def main() -> None:
     runs_dir = runs_dir.resolve()
 
     out_dir = Path(args.out_dir)
-    if args.out_dir == "early_detection/in_domain_early_detection/analysis_outputs":
-        out_dir = script_dir / "analysis_outputs"
+    if args.out_dir == "early_detection/in_domain_early_detection/fixed_analyzer":
+        out_dir = script_dir / "fixed_analyzer"
     elif not out_dir.is_absolute():
         out_dir = (script_dir / out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)

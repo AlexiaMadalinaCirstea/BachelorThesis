@@ -176,37 +176,8 @@ def load_eval_split(
     if not path.exists():
         raise FileNotFoundError(f"Missing split file: {path}")
 
-    if max_rows_per_scenario is None:
-        return load_split(data_dir, split_name, target_col)
-
-    parquet = pq.ParquetFile(path)
-    scenario_parts: dict[str, list[pd.DataFrame]] = {}
-    scenario_counts: dict[str, int] = {}
-
-    for batch in parquet.iter_batches(columns=REQUIRED_COLS, batch_size=100_000):
-        batch_df = batch.to_pandas()
-        for scenario, group in batch_df.groupby("scenario", sort=False):
-            current = scenario_counts.get(scenario, 0)
-            if current >= max_rows_per_scenario:
-                continue
-
-            keep = max_rows_per_scenario - current
-            selected = group.head(keep)
-            if selected.empty:
-                continue
-
-            scenario_parts.setdefault(scenario, []).append(selected)
-            scenario_counts[scenario] = current + len(selected)
-
-    if not scenario_parts:
-        raise AssertionError(f"No rows collected for split {split_name}")
-
-    collected = pd.concat(
-        [pd.concat(parts, ignore_index=True) for parts in scenario_parts.values()],
-        ignore_index=True,
-    )
-    validate_columns(collected, target_col)
-    return prepare_eval_frame(collected, max_rows_per_scenario=None)
+    df = load_split(data_dir, split_name, target_col)
+    return prepare_eval_frame(df, max_rows_per_scenario=max_rows_per_scenario)
 
 
 def prepare_eval_frame(df: pd.DataFrame, max_rows_per_scenario: int | None) -> pd.DataFrame:
