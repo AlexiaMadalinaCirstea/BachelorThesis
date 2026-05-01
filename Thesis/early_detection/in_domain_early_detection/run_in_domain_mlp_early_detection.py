@@ -277,25 +277,11 @@ def maybe_sample_rows(df: pd.DataFrame, max_rows: int | None, seed: int) -> pd.D
     return df.sample(n=max_rows, random_state=seed).reset_index(drop=True)
 
 
-def stratified_cap(df: pd.DataFrame, max_rows: int, label_col: str, seed: int) -> pd.DataFrame:
-    if len(df) <= max_rows:
-        return df
-    parts = []
-    allocated = 0
-    groups = list(df.groupby(label_col, sort=False))
-    for index, (label_value, group) in enumerate(groups):
-        remaining_groups = len(groups) - index
-        remaining_budget = max_rows - allocated
-        n_take = int(round(max_rows * len(group) / len(df)))
-        n_take = max(1, min(len(group), n_take))
-        n_take = min(n_take, remaining_budget - (remaining_groups - 1))
-        sampled = group.sample(n=n_take, random_state=seed + int(label_value))
-        parts.append(sampled)
-        allocated += len(sampled)
-    out = pd.concat(parts, ignore_index=False)
-    if len(out) > max_rows:
-        out = out.sample(n=max_rows, random_state=seed)
-    return out.reset_index(drop=True)
+def cap_unsw_eval_rows(df: pd.DataFrame, max_rows: int | None) -> pd.DataFrame:
+    ordered = df.sort_values("id", kind="mergesort").reset_index(drop=True)
+    if max_rows is None or len(ordered) <= max_rows:
+        return ordered
+    return ordered.head(max_rows).reset_index(drop=True)
 
 
 def prefix_by_scenario(df: pd.DataFrame, fraction: float) -> pd.DataFrame:
@@ -395,32 +381,14 @@ def load_iot23_eval_split(
 ) -> pd.DataFrame:
     if max_rows_per_scenario is None:
         return load_iot23_split(data_dir, split_name).sort_values(["scenario", "ts"], kind="mergesort").reset_index(drop=True)
-
-    path = data_dir / f"{split_name}.parquet"
-    parquet = pq.ParquetFile(path)
-    scenario_parts: dict[str, list[pd.DataFrame]] = {}
-    scenario_counts: dict[str, int] = {}
-
-    for batch in parquet.iter_batches(columns=IOT23_REQUIRED_COLS, batch_size=100_000):
-        batch_df = batch.to_pandas()
-        for scenario, group in batch_df.groupby("scenario", sort=False):
-            current = scenario_counts.get(scenario, 0)
-            if current >= max_rows_per_scenario:
-                continue
-
-            keep = max_rows_per_scenario - current
-            selected = group.head(keep)
-            if selected.empty:
-                continue
-
-            scenario_parts.setdefault(scenario, []).append(selected)
-            scenario_counts[scenario] = current + len(selected)
-
-    collected = pd.concat(
-        [pd.concat(parts, ignore_index=True) for parts in scenario_parts.values()],
-        ignore_index=True,
+    ordered = load_iot23_split(data_dir, split_name).sort_values(
+        ["scenario", "ts"], kind="mergesort"
+    ).reset_index(drop=True)
+    return (
+        ordered.groupby("scenario", sort=False, group_keys=False)
+        .head(max_rows_per_scenario)
+        .reset_index(drop=True)
     )
-    return collected.sort_values(["scenario", "ts"], kind="mergesort").reset_index(drop=True)
 
 
 def run_iot23(args: argparse.Namespace) -> None:
@@ -585,9 +553,8 @@ def run_unsw(args: argparse.Namespace) -> None:
     train_df, val_df = split_unsw_train_val(train_full_df, args.unsw_val_fraction, args.seed)
 
     train_df = maybe_sample_rows(train_df, args.unsw_train_max_rows, args.seed)
-    if args.unsw_eval_max_rows is not None:
-        val_df = stratified_cap(val_df, args.unsw_eval_max_rows, "label", args.seed).sort_values("id", kind="mergesort").reset_index(drop=True)
-        test_df = stratified_cap(test_df, args.unsw_eval_max_rows, "label", args.seed).sort_values("id", kind="mergesort").reset_index(drop=True)
+    val_df = cap_unsw_eval_rows(val_df, args.unsw_eval_max_rows)
+    test_df = cap_unsw_eval_rows(test_df, args.unsw_eval_max_rows)
 
     pipeline = build_pipeline(
         numeric_cols=UNSW_NUMERIC_COLS,

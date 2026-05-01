@@ -203,35 +203,11 @@ def maybe_sample_train(df: pd.DataFrame, max_rows: int | None, seed: int) -> pd.
     return df.sample(n=max_rows, random_state=seed).reset_index(drop=True)
 
 
-def stratified_cap(df: pd.DataFrame, max_rows: int, seed: int) -> pd.DataFrame:
-    if len(df) <= max_rows:
-        return df
-
-    parts = []
-    allocated = 0
-    label_groups = list(df.groupby("label", sort=False))
-
-    for index, (label_value, group) in enumerate(label_groups):
-        remaining_labels = len(label_groups) - index
-        remaining_budget = max_rows - allocated
-        n_take = int(round(max_rows * len(group) / len(df)))
-        n_take = max(1, min(len(group), n_take))
-        n_take = min(n_take, remaining_budget - (remaining_labels - 1))
-        sampled = group.sample(n=n_take, random_state=seed + int(label_value))
-        parts.append(sampled)
-        allocated += len(sampled)
-
-    capped = pd.concat(parts, ignore_index=False)
-    if len(capped) > max_rows:
-        capped = capped.sample(n=max_rows, random_state=seed)
-    return capped.reset_index(drop=True)
-
-
-def prepare_eval_frame(df: pd.DataFrame, max_rows: int | None, seed: int) -> pd.DataFrame:
-    working = df
-    if max_rows is not None and len(working) > max_rows:
-        working = stratified_cap(working, max_rows, seed=seed)
-    return working.sort_values("id", kind="mergesort").reset_index(drop=True)
+def prepare_eval_frame(df: pd.DataFrame, max_rows: int | None) -> pd.DataFrame:
+    ordered = df.sort_values("id", kind="mergesort").reset_index(drop=True)
+    if max_rows is None or len(ordered) <= max_rows:
+        return ordered
+    return ordered.head(max_rows).reset_index(drop=True)
 
 
 def prefix_frame(df: pd.DataFrame, fraction: float) -> pd.DataFrame:
@@ -403,8 +379,8 @@ def main() -> None:
     train_df, val_df = split_train_val(train_full_df, args.val_fraction, args.seed)
 
     train_df = maybe_sample_train(train_df, args.train_max_rows, args.seed)
-    val_df = prepare_eval_frame(val_df, args.eval_max_rows, args.seed)
-    test_df = prepare_eval_frame(test_df, args.eval_max_rows, args.seed)
+    val_df = prepare_eval_frame(val_df, args.eval_max_rows)
+    test_df = prepare_eval_frame(test_df, args.eval_max_rows)
 
     pipeline = build_pipeline(
         seed=args.seed,
