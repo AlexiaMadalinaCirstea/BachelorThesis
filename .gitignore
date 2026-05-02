@@ -1,1 +1,12 @@
 tmp_pdf_text/
+
+# Generated cross-domain early-detection artifacts
+Thesis/early_detection/cross_domain_early_detection/__pycache__/
+Thesis/early_detection/cross_domain_early_detection/outputs_*/
+Thesis/early_detection/cross_domain_early_detection/cross_domain_analyzer/
+Thesis/early_detection/cross_domain_early_detection/cross_domain_multi_seed_analyzer/
+Thesis/early_detection/cross_domain_early_detection/multiple_seeds_test/
+Thesis/early_detection/cross_domain_early_detection/sensitivity_tests/
+Thesis/early_detection/cross_domain_early_detection/sensitivity_analyzer/
+Thesis/early_detection/cross_domain_early_detection/__sensitivity_smoke/
+Thesis/early_detection/cross_domain_early_detection/__sensitivity_smoke_analyzer/
