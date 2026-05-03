@@ -198,22 +198,30 @@ def allocate_caps(domain_rows: pd.DataFrame, total_cap: int | None) -> dict[str,
     if total_cap is None or len(domain_ids) == 1:
         return {domain_id: total_cap for domain_id in domain_ids}
 
-    weights = domain_rows["n_rows"].astype(float)
+    if total_cap <= 0:
+        return {domain_id: 0 for domain_id in domain_ids}
+
+    weights = domain_rows["n_rows"].astype(float).clip(lower=0.0)
     weight_sum = float(weights.sum())
     if weight_sum <= 0:
-        equal_cap = max(1, total_cap // len(domain_ids))
-        return {domain_id: equal_cap for domain_id in domain_ids}
+        n_domains = len(domain_ids)
+        base_cap = total_cap // n_domains
+        remainder = total_cap % n_domains
+        caps = [base_cap] * n_domains
+        for idx in range(remainder):
+            caps[idx] += 1
+        return {domain_id: cap for domain_id, cap in zip(domain_ids, caps)}
 
     raw_caps = total_cap * (weights / weight_sum)
-    caps = [max(1, int(math.floor(value))) for value in raw_caps.tolist()]
+    caps = [int(math.floor(value)) for value in raw_caps.tolist()]
     remaining = total_cap - sum(caps)
 
     fractional = [
-        (raw_caps.iloc[idx] - caps[idx], idx)
+        (raw_caps.iloc[idx] - caps[idx], weights.iloc[idx], idx)
         for idx in range(len(caps))
     ]
     fractional.sort(reverse=True)
-    for _, idx in fractional[: max(0, remaining)]:
+    for _, _, idx in fractional[:remaining]:
         caps[idx] += 1
 
     return {domain_id: cap for domain_id, cap in zip(domain_ids, caps)}
@@ -335,41 +343,50 @@ def load_domain_pool(
 
     caps_by_domain = allocate_caps(domain_rows, total_cap=total_cap)
     aligned_parts: list[pd.DataFrame] = []
-    feature_cols: list[str] | None = None
+    feature_cols = alignment_df["aligned_feature"].tolist()
 
     for _, domain_row in domain_rows.iterrows():
-        cache_key = (str(domain_row["domain_id"]), caps_by_domain[domain_row["domain_id"]], seed)
+        domain_cap = caps_by_domain[domain_row["domain_id"]]
+        if domain_cap == 0:
+            continue
+
+        cache_key = (str(domain_row["domain_id"]), domain_cap, seed)
         if cache_key in cache:
             aligned_df = cache[cache_key]
         else:
             if domain_row["dataset"] == "iot23":
-                aligned_df, feature_cols_local = load_iot_domain(
+                aligned_df, _ = load_iot_domain(
                     domain_row=domain_row,
                     iot_native_cols=iot_native_cols,
                     alignment_df=alignment_df,
                     scenario_dir=scenario_dir,
-                    max_rows=caps_by_domain[domain_row["domain_id"]],
+                    max_rows=domain_cap,
                     seed=seed,
                 )
             else:
-                aligned_df, feature_cols_local = load_unsw_domain(
+                aligned_df, _ = load_unsw_domain(
                     domain_row=domain_row,
                     unsw_native_cols=unsw_native_cols,
                     alignment_df=alignment_df,
-                    max_rows=caps_by_domain[domain_row["domain_id"]],
+                    max_rows=domain_cap,
                     seed=seed,
                 )
             cache[cache_key] = aligned_df
-            if feature_cols is None:
-                feature_cols = feature_cols_local
 
         aligned_parts.append(aligned_df)
-        if feature_cols is None:
-            feature_cols = [col for col in aligned_df.columns if col != "label"]
 
-    combined = pd.concat(aligned_parts, ignore_index=True)
-    combined = base.maybe_sample_rows(combined, max_rows=total_cap, random_state=seed)
-    return combined.reset_index(drop=True), (feature_cols or [])
+    if aligned_parts:
+        combined = pd.concat(aligned_parts, ignore_index=True).reset_index(drop=True)
+    else:
+        combined = pd.DataFrame(columns=feature_cols + ["label"])
+
+    if total_cap is not None and len(combined) > total_cap:
+        raise ValueError(
+            f"Allocated domain pool exceeds total_cap after per-domain capping: "
+            f"{len(combined)} > {total_cap}"
+        )
+
+    return combined, feature_cols
 
 
 def resolve_target_train_domain_ids(target_row: pd.Series, registry: pd.DataFrame) -> tuple[list[str], str]:

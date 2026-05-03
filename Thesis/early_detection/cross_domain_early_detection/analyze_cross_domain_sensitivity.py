@@ -192,11 +192,11 @@ def read_run_config(path: Path) -> dict:
 def sensitivity_config_label(study: str, direction: str, run_config: dict) -> str:
     if study == "size":
         if direction == "iot23_to_unsw":
-            return f"IoT train {int(run_config.get('iot_train_rows', 0))}"
-        return f"UNSW train {int(run_config.get('unsw_source_train_rows', 0))}"
+            return "IoT source train = 200k"
+        return "UNSW source train = full train set"
     if direction == "iot23_to_unsw":
-        return f"UNSW eval {int(run_config.get('unsw_target_val_rows', 0))}"
-    return f"IoT eval {int(run_config.get('iot_val_rows', 0))}"
+        return "larger UNSW eval subset"
+    return "larger IoT eval subset"
 
 
 def load_overall_fraction_summary(
@@ -546,9 +546,13 @@ def plot_study_metric_curves(
         return
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    colors = {"rf": "#F58518", "mlp": "#4C78A8"}
-    linestyles = {"baseline": "--", "sensitivity": "-"}
-    alphas = {"baseline": 0.12, "sensitivity": 0.18}
+    colors = {
+        ("rf", "baseline"): "#F58518",
+        ("rf", "sensitivity"): "#E45756",
+        ("mlp", "baseline"): "#4C78A8",
+        ("mlp", "sensitivity"): "#54A24B",
+    }
+    alphas = {"baseline": 0.14, "sensitivity": 0.18}
 
     for model in ["rf", "mlp"]:
         for config_group in ["baseline", "sensitivity"]:
@@ -562,17 +566,20 @@ def plot_study_metric_curves(
             low = group[f"{metric}_ci95_low"].to_numpy(dtype=float)
             high = group[f"{metric}_ci95_high"].to_numpy(dtype=float)
             label_suffix = group["config_label"].iloc[0]
-            label = f"{MODEL_LABELS[model]} {label_suffix}"
+            if config_group == "baseline":
+                label = f"{MODEL_LABELS[model]} baseline"
+            else:
+                label = f"{MODEL_LABELS[model]} sensitivity: {label_suffix}"
+            color = colors[(model, config_group)]
             ax.plot(
                 x,
                 mean,
                 marker="o",
                 linewidth=2,
-                color=colors[model],
-                linestyle=linestyles[config_group],
+                color=color,
                 label=label,
             )
-            ax.fill_between(x, low, high, color=colors[model], alpha=alphas[config_group])
+            ax.fill_between(x, low, high, color=color, alpha=alphas[config_group])
 
     ax.set_title(f"{STUDY_LABELS[study]}: {DIRECTION_LABELS[direction]} {metric}")
     ax.set_xlabel("Prefix Fraction")
