@@ -132,13 +132,17 @@ def stream_sample_iot23_train(path: Path, columns: list[str], max_rows: int, see
 
     for batch_index, batch in enumerate(parquet.iter_batches(columns=columns, batch_size=100_000)):
         batch_df = batch.to_pandas()
-        sampled_batch = batch_df.sample(frac=sample_prob, random_state=seed + batch_index)
+        n_take = max(1, int(round(len(batch_df) * sample_prob)))
+        n_take = min(n_take, len(batch_df))
+        sampled_batch = batch_df.sample(n=n_take, random_state=seed + batch_index)
         if not sampled_batch.empty:
             sampled_parts.append(sampled_batch)
 
     if not sampled_parts:
-        fallback = load_iot23_frame(path, columns=columns).head(max_rows)
-        return fallback.reset_index(drop=True)
+        raise ValueError(
+            "Streaming IoT-23 sampler failed to collect any rows. "
+            "This should not happen with bounded per-batch sampling."
+        )
 
     sampled_df = pd.concat(sampled_parts, ignore_index=True)
     if len(sampled_df) > max_rows:
