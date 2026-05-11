@@ -19,3 +19,9 @@ Thesis/early_detection/transfer_learning_based_early_detection/multiple_seeds_te
 Thesis/early_detection/transfer_learning_based_early_detection/multi_seed_analyzer/
 Thesis/early_detection/transfer_learning_based_early_detection/reinforced_10seed_key_settings/
 Thesis/early_detection/transfer_learning_based_early_detection/reinforced_10seed_key_settings_analyzer/
+
+# Generated hybrid early-detection artifacts
+Thesis/early_detection/hybrid/__pycache__/
+Thesis/early_detection/hybrid/smoke_*/
+Thesis/early_detection/hybrid/outputs_*/
+Thesis/early_detection/hybrid/hybrid_analyzer/
