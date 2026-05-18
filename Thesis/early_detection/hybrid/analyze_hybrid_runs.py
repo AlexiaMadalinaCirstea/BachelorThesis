@@ -27,7 +27,10 @@ def parse_args() -> argparse.Namespace:
 
 def collect_fraction_summaries(runs_dir: Path) -> pd.DataFrame:
     rows = []
-    for csv_path in runs_dir.rglob("overall_fraction_summary.csv"):
+    # Treat only per-run top-level summaries as canonical. Recursive collection
+    # would also ingest nested per-direction summaries and double count the same
+    # experiment in later aggregation.
+    for csv_path in runs_dir.glob("*/overall_fraction_summary.csv"):
         try:
             df = pd.read_csv(csv_path)
         except Exception:
@@ -39,8 +42,29 @@ def collect_fraction_summaries(runs_dir: Path) -> pd.DataFrame:
         df["run_dir"] = str(csv_path.parent)
         rows.append(df)
     if not rows:
-        raise ValueError(f"No hybrid overall_fraction_summary.csv files found under {runs_dir}")
-    return pd.concat(rows, ignore_index=True)
+        raise ValueError(
+            f"No hybrid overall_fraction_summary.csv files found under direct children of {runs_dir}"
+        )
+
+    summary_df = pd.concat(rows, ignore_index=True)
+    duplicate_cols = [
+        col
+        for col in ["run_dir", "direction", "ablation_name", "split", "fraction"]
+        if col in summary_df.columns
+    ]
+    if duplicate_cols:
+        duplicate_mask = summary_df.duplicated(subset=duplicate_cols, keep=False)
+        if duplicate_mask.any():
+            duplicate_preview = (
+                summary_df.loc[duplicate_mask, duplicate_cols]
+                .sort_values(duplicate_cols)
+                .drop_duplicates()
+            )
+            raise ValueError(
+                "Duplicate hybrid summary rows detected for canonical analysis units. "
+                f"Duplicate keys based on {duplicate_cols} include:\n{duplicate_preview.to_string(index=False)}"
+            )
+    return summary_df
 
 
 def make_branch_weight_plot(df: pd.DataFrame, out_path: Path) -> None:

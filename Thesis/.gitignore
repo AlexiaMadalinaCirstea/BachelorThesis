@@ -36,6 +36,12 @@ early_detection/in_domain_early_detection/outputs_iot23_*/
 early_detection/in_domain_early_detection/outputs_unsw_*/
 early_detection/cross_domain_early_detection/outputs_*/
 early_detection/transfer_learning_based_early_detection/outputs_*/
+early_detection/hybrid/outputs_*/
+early_detection/hybrid/hybrid_analyzer/
+early_detection/hybrid/new tests/
+early_detection/hybrid/updated_arch/
+early_detection/hybrid/updated_arch2/
+early_detection/hybrid/updated_arch2_more_tests/
 
 # Local document review / extraction artifacts
 tmp_doc_review/

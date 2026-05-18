@@ -12,6 +12,7 @@ import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_fscore_support
 from torch import Tensor, nn
+from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -109,6 +110,32 @@ def compute_metrics(y_true: pd.Series, y_pred: pd.Series | np.ndarray) -> dict[s
         "true_negatives": int(cm[0, 0]),
         "true_positives": int(cm[1, 1]),
     }
+
+
+def find_best_attack_f1_threshold(y_true: np.ndarray, y_score: np.ndarray) -> tuple[float, float]:
+    """Select a source-validation threshold that maximizes attack-class F1."""
+    labels = np.asarray(y_true, dtype=np.int64)
+    scores = np.asarray(y_score, dtype=np.float64)
+    if labels.size == 0 or np.unique(labels).size < 2:
+        return 0.5, 0.0
+
+    candidates = np.unique(np.concatenate(([0.05, 0.5, 0.95], scores)))
+    best_threshold = 0.5
+    best_f1 = -1.0
+    for threshold in candidates:
+        preds = (scores >= threshold).astype(np.int64)
+        _, _, f1_attack, _ = precision_recall_fscore_support(
+            labels,
+            preds,
+            labels=[1],
+            average=None,
+            zero_division=0,
+        )
+        score = float(f1_attack[0])
+        if score > best_f1 or (math.isclose(score, best_f1) and abs(float(threshold) - 0.5) < abs(best_threshold - 0.5)):
+            best_f1 = score
+            best_threshold = float(threshold)
+    return best_threshold, best_f1
 
 
 def add_prefix_metadata(df: pd.DataFrame) -> pd.DataFrame:
@@ -286,12 +313,14 @@ class HybridSequenceDataset(Dataset):
         self.evidence_progress = evidence_progress
         self.labels = labels
         self.seq_len = seq_len
-        self.sequences = self._build_sequences(group_ids)
+        self.sequences, self.sequence_lengths = self._build_sequences(group_ids)
+        self.sequence_masks = self._build_sequence_masks()
         if self.sequences.shape[1] != self.seq_len:
             raise ValueError("Sequence builder produced the wrong sequence length.")
 
-    def _build_sequences(self, group_ids: np.ndarray) -> np.ndarray:
+    def _build_sequences(self, group_ids: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         seqs = np.zeros((len(self.temporal_numeric), self.seq_len, self.temporal_numeric.shape[1]), dtype=np.float32)
+        lengths = np.ones(len(self.temporal_numeric), dtype=np.int64)
         groups: dict[str, list[int]] = {}
         for idx, gid in enumerate(group_ids):
             groups.setdefault(str(gid), []).append(idx)
@@ -301,7 +330,13 @@ class HybridSequenceDataset(Dataset):
                 hist = indices[start : pos + 1]
                 seq = self.temporal_numeric[hist]
                 seqs[idx, -len(seq) :] = seq
-        return seqs
+                lengths[idx] = len(seq)
+        return seqs, lengths
+
+    def _build_sequence_masks(self) -> np.ndarray:
+        positions = np.arange(self.seq_len, dtype=np.int64)[None, :]
+        starts = self.seq_len - self.sequence_lengths[:, None]
+        return (positions >= starts).astype(np.float32)
 
     def __len__(self) -> int:
         return len(self.labels)
@@ -311,6 +346,8 @@ class HybridSequenceDataset(Dataset):
             "categorical": torch.as_tensor(self.categorical[idx], dtype=torch.long),
             "numeric": torch.as_tensor(self.numeric[idx], dtype=torch.float32),
             "sequence": torch.as_tensor(self.sequences[idx], dtype=torch.float32),
+            "sequence_mask": torch.as_tensor(self.sequence_masks[idx], dtype=torch.float32),
+            "sequence_length": torch.as_tensor(self.sequence_lengths[idx], dtype=torch.long),
             "evidence_progress": torch.as_tensor(self.evidence_progress[idx], dtype=torch.float32),
             "label": torch.as_tensor(self.labels[idx], dtype=torch.long),
         }
@@ -322,22 +359,28 @@ class TCNBlock(nn.Module):
         padding = dilation
         self.conv1 = nn.Conv1d(channels, channels, kernel_size=3, padding=padding, dilation=dilation)
         self.conv2 = nn.Conv1d(channels, channels, kernel_size=3, padding=padding, dilation=dilation)
-        self.norm1 = nn.BatchNorm1d(channels)
-        self.norm2 = nn.BatchNorm1d(channels)
+        self.norm1 = nn.LayerNorm(channels)
+        self.norm2 = nn.LayerNorm(channels)
         self.dropout = nn.Dropout(dropout)
         self.act = nn.GELU()
 
-    def forward(self, x: Tensor) -> Tensor:
-        residual = x
-        out = self.conv1(x)
+    def _apply_norm(self, x: Tensor, norm: nn.LayerNorm, mask: Tensor) -> Tensor:
+        out = x.transpose(1, 2)
+        out = norm(out)
+        out = out.transpose(1, 2)
+        return out * mask
+
+    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
+        residual = x * mask
+        out = self.conv1(residual)
         out = out[..., : x.shape[-1]]
-        out = self.act(self.norm1(out))
-        out = self.dropout(out)
+        out = self._apply_norm(out, self.norm1, mask)
+        out = self.dropout(self.act(out)) * mask
         out = self.conv2(out)
         out = out[..., : x.shape[-1]]
-        out = self.act(self.norm2(out))
-        out = self.dropout(out)
-        return residual + out
+        out = self._apply_norm(out, self.norm2, mask)
+        out = self.dropout(self.act(out)) * mask
+        return (residual + out) * mask
 
 
 class TemporalTCNBranch(nn.Module):
@@ -345,6 +388,11 @@ class TemporalTCNBranch(nn.Module):
         super().__init__()
         self.input_proj = nn.Linear(input_dim, hidden_dim)
         self.blocks = nn.ModuleList([TCNBlock(hidden_dim, 2**i, dropout) for i in range(num_blocks)])
+        self.pool_proj = nn.Sequential(
+            nn.Linear(hidden_dim * 2 + 1, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
         self.head = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
@@ -352,12 +400,17 @@ class TemporalTCNBranch(nn.Module):
             nn.Linear(hidden_dim, 2),
         )
 
-    def forward(self, sequence: Tensor) -> tuple[Tensor, Tensor]:
-        x = self.input_proj(sequence)
+    def forward(self, sequence: Tensor, sequence_mask: Tensor, evidence_progress: Tensor) -> tuple[Tensor, Tensor]:
+        x = self.input_proj(sequence) * sequence_mask.unsqueeze(-1)
         x = x.transpose(1, 2)
+        mask = sequence_mask.unsqueeze(1)
         for block in self.blocks:
-            x = block(x)
-        pooled = x[:, :, -1]
+            x = block(x, mask)
+        valid_counts = mask.sum(dim=2).clamp_min(1.0)
+        masked_mean = (x * mask).sum(dim=2) / valid_counts
+        last_valid_idx = sequence_mask.sum(dim=1).long().clamp_min(1) - 1
+        last_valid = x.transpose(1, 2)[torch.arange(x.shape[0], device=x.device), last_valid_idx]
+        pooled = self.pool_proj(torch.cat([last_valid, masked_mean, evidence_progress.unsqueeze(1)], dim=1))
         logits = self.head(pooled)
         return logits, pooled
 
@@ -547,54 +600,99 @@ class FTTransformerBranch(nn.Module):
 
 
 class PrototypicalBranch(nn.Module):
-    def __init__(self, input_dim: int, embed_dim: int, dropout: float) -> None:
+    def __init__(self, input_dim: int, embed_dim: int, dropout: float, prototypes_per_class: int = 4) -> None:
         super().__init__()
+        self.embed_dim = embed_dim
+        self.prototypes_per_class = prototypes_per_class
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, embed_dim),
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(embed_dim, embed_dim),
         )
-        self.register_buffer("prototypes", torch.zeros(2, embed_dim))
-        self.register_buffer("prototype_counts", torch.zeros(2))
+        self.logit_scale = nn.Parameter(torch.tensor(1.0))
+        self.logit_bias = nn.Parameter(torch.zeros(2))
+        self.register_buffer("prototypes", torch.zeros(2, prototypes_per_class, embed_dim))
+        self.register_buffer("prototype_counts", torch.zeros(2, prototypes_per_class))
 
-    def forward(self, flat_features: Tensor) -> tuple[Tensor, Tensor, Tensor]:
-        embedding = self.encoder(flat_features)
-        distances = torch.cdist(embedding, self.prototypes)
-        logits = -distances
-        margin = torch.abs(distances[:, 0] - distances[:, 1]).unsqueeze(1)
-        return logits, embedding, margin
+    def _cluster_class_embeddings(self, class_embeddings: Tensor, class_index: int) -> None:
+        if class_embeddings.shape[0] == 0:
+            return
+        k = min(self.prototypes_per_class, class_embeddings.shape[0])
+        centers = class_embeddings[:1]
+        if k > 1:
+            min_dists = torch.cdist(class_embeddings, centers).squeeze(1)
+            for _ in range(1, k):
+                next_idx = int(torch.argmax(min_dists).item())
+                centers = torch.cat([centers, class_embeddings[next_idx : next_idx + 1]], dim=0)
+                min_dists = torch.minimum(min_dists, torch.cdist(class_embeddings, centers[-1:]).squeeze(1))
+        counts = torch.zeros(k, device=class_embeddings.device)
+        for _ in range(5):
+            distances = torch.cdist(class_embeddings, centers)
+            assignments = distances.argmin(dim=1)
+            new_centers = []
+            new_counts = []
+            for proto_idx in range(k):
+                mask = assignments == proto_idx
+                if mask.any():
+                    new_centers.append(class_embeddings[mask].mean(dim=0, keepdim=True))
+                    new_counts.append(mask.sum().float().view(1))
+                else:
+                    new_centers.append(centers[proto_idx : proto_idx + 1])
+                    new_counts.append(torch.zeros(1, device=class_embeddings.device))
+            centers = torch.cat(new_centers, dim=0)
+            counts = torch.cat(new_counts, dim=0)
+        if k < self.prototypes_per_class:
+            pad_count = self.prototypes_per_class - k
+            centers = torch.cat([centers, centers[:1].expand(pad_count, -1)], dim=0)
+            counts = torch.cat([counts, torch.zeros(pad_count, device=class_embeddings.device)], dim=0)
+        self.prototypes[class_index] = F.normalize(centers, dim=-1)
+        self.prototype_counts[class_index] = counts
+
+    def forward(self, flat_features: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        embedding = F.normalize(self.encoder(flat_features), dim=-1)
+        distances = torch.linalg.norm(embedding[:, None, None, :] - self.prototypes[None, :, :, :], dim=-1)
+        min_class_distances, closest_proto_idx = distances.min(dim=2)
+        scale = F.softplus(self.logit_scale).clamp_min(1e-3)
+        logits = -scale * min_class_distances + self.logit_bias.unsqueeze(0)
+        margin = (min_class_distances[:, 0] - min_class_distances[:, 1]).abs().unsqueeze(1)
+        return logits, embedding, margin, min_class_distances, closest_proto_idx
 
     @torch.no_grad()
     def recompute_prototypes(self, loader: DataLoader, model: "FullHybridEarlyDetectionModel") -> None:
-        sum_embeddings = torch.zeros_like(self.prototypes)
-        counts = torch.zeros_like(self.prototype_counts)
+        embeddings_by_class: dict[int, list[Tensor]] = {0: [], 1: []}
         model.eval()
         for batch in loader:
             batch = {k: v.to(DEVICE) for k, v in batch.items()}
             flat = model.build_flat_prototype_features(batch["numeric"], batch["categorical"])
-            embedding = self.encoder(flat)
+            embedding = F.normalize(self.encoder(flat), dim=-1)
             labels = batch["label"]
             for label in (0, 1):
                 mask = labels == label
                 if mask.any():
-                    sum_embeddings[label] += embedding[mask].sum(dim=0)
-                    counts[label] += mask.sum()
+                    embeddings_by_class[label].append(embedding[mask])
         for label in (0, 1):
-            if counts[label] > 0:
-                self.prototypes[label] = sum_embeddings[label] / counts[label]
-        self.prototype_counts = counts
+            if embeddings_by_class[label]:
+                class_embeddings = torch.cat(embeddings_by_class[label], dim=0)
+                self._cluster_class_embeddings(class_embeddings, label)
 
 
 class AdaptiveGatingNetwork(nn.Module):
-    def __init__(self, hidden_dim: int, dropout: float) -> None:
+    def __init__(self, tab_dim: int, temp_dim: int, proto_dim: int, hidden_dim: int, dropout: float) -> None:
         super().__init__()
+        rep_dim = max(16, hidden_dim)
+        self.tab_proj = nn.Sequential(nn.Linear(tab_dim, rep_dim), nn.LayerNorm(rep_dim), nn.GELU())
+        self.temp_proj = nn.Sequential(nn.Linear(temp_dim, rep_dim), nn.LayerNorm(rep_dim), nn.GELU())
+        self.proto_proj = nn.Sequential(nn.Linear(proto_dim, rep_dim), nn.LayerNorm(rep_dim), nn.GELU())
         self.net = nn.Sequential(
-            nn.Linear(7, hidden_dim),
+            nn.Linear(11 + rep_dim * 3, hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, 3),
         )
+
+    def project_representations(self, tab_repr: Tensor, temp_repr: Tensor, proto_repr: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        return self.tab_proj(tab_repr), self.temp_proj(temp_repr), self.proto_proj(proto_repr)
 
     def forward(
         self,
@@ -603,23 +701,37 @@ class AdaptiveGatingNetwork(nn.Module):
         proto_prob: Tensor,
         evidence_progress: Tensor,
         proto_margin: Tensor,
+        tab_repr: Tensor,
+        temp_repr: Tensor,
+        proto_repr: Tensor,
     ) -> Tensor:
         tab_conf = torch.abs(tab_prob - 0.5) * 2.0
         temp_conf = torch.abs(temp_prob - 0.5) * 2.0
         proto_conf = torch.abs(proto_prob - 0.5) * 2.0
+        tab_entropy = -(tab_prob * torch.log(tab_prob.clamp_min(1e-6)) + (1.0 - tab_prob) * torch.log((1.0 - tab_prob).clamp_min(1e-6)))
+        temp_entropy = -(temp_prob * torch.log(temp_prob.clamp_min(1e-6)) + (1.0 - temp_prob) * torch.log((1.0 - temp_prob).clamp_min(1e-6)))
+        proto_entropy = -(proto_prob * torch.log(proto_prob.clamp_min(1e-6)) + (1.0 - proto_prob) * torch.log((1.0 - proto_prob).clamp_min(1e-6)))
+        tab_proj, temp_proj, proto_proj = self.project_representations(tab_repr, temp_repr, proto_repr)
         inputs = torch.cat(
             [
                 evidence_progress.unsqueeze(1),
                 tab_conf.unsqueeze(1),
                 temp_conf.unsqueeze(1),
                 proto_conf.unsqueeze(1),
+                tab_entropy.unsqueeze(1),
+                temp_entropy.unsqueeze(1),
+                proto_entropy.unsqueeze(1),
                 torch.abs(tab_prob - temp_prob).unsqueeze(1),
                 torch.abs(tab_prob - proto_prob).unsqueeze(1),
+                torch.abs(temp_prob - proto_prob).unsqueeze(1),
                 proto_margin,
+                tab_proj,
+                temp_proj,
+                proto_proj,
             ],
             dim=1,
         )
-        return torch.softmax(self.net(inputs), dim=1)
+        return self.net(inputs)
 
 
 class FullHybridEarlyDetectionModel(nn.Module):
@@ -639,6 +751,8 @@ class FullHybridEarlyDetectionModel(nn.Module):
         attention_dropout: float,
         ffn_dropout: float,
         residual_dropout: float,
+        gate_uniform_mix: float = 0.2,
+        min_branch_weight: float = 0.05,
         disable_tabular_branch: bool = False,
         disable_temporal_branch: bool = False,
         disable_prototype_branch: bool = False,
@@ -649,6 +763,8 @@ class FullHybridEarlyDetectionModel(nn.Module):
         self.disable_temporal_branch = disable_temporal_branch
         self.disable_prototype_branch = disable_prototype_branch
         self.uniform_gating = uniform_gating
+        self.gate_uniform_mix = gate_uniform_mix
+        self.min_branch_weight = min_branch_weight
         if all([disable_tabular_branch, disable_temporal_branch, disable_prototype_branch]):
             raise ValueError("At least one branch must remain enabled.")
 
@@ -673,7 +789,7 @@ class FullHybridEarlyDetectionModel(nn.Module):
             [nn.Embedding(cardinality + 1, min(16, max(4, math.ceil(math.sqrt(cardinality))))) for cardinality in cat_cardinalities]
         )
         self.prototype_branch = PrototypicalBranch(flat_dim, prototype_embed_dim, dropout)
-        self.gating = AdaptiveGatingNetwork(gate_hidden_dim, dropout)
+        self.gating = AdaptiveGatingNetwork(token_dim, tcn_hidden_dim, prototype_embed_dim, gate_hidden_dim, dropout)
 
     def make_parameter_groups(self) -> list[dict[str, object]]:
         tabular_groups = self.tabular_branch.make_parameter_groups()
@@ -706,27 +822,65 @@ class FullHybridEarlyDetectionModel(nn.Module):
 
     def _uniform_or_masked_weights(
         self,
-        raw_weights: Tensor,
+        raw_logits: Tensor,
         enabled_mask: Tensor,
     ) -> Tensor:
+        uniform_weights = enabled_mask / enabled_mask.sum(dim=1, keepdim=True).clamp_min(1e-8)
         if self.uniform_gating:
-            weights = enabled_mask.clone()
-        else:
-            weights = raw_weights * enabled_mask
+            return uniform_weights
+
+        masked_logits = raw_logits.masked_fill(enabled_mask <= 0, -1e9)
+        weights = torch.softmax(masked_logits, dim=1)
+        if self.gate_uniform_mix > 0.0:
+            weights = (1.0 - self.gate_uniform_mix) * weights + self.gate_uniform_mix * uniform_weights
+        if self.min_branch_weight > 0.0:
+            floor = self.min_branch_weight * uniform_weights
+            slack = (1.0 - floor.sum(dim=1, keepdim=True)).clamp_min(1e-8)
+            weights = floor + slack * weights
         denom = weights.sum(dim=1, keepdim=True).clamp_min(1e-8)
         return weights / denom
+
+    def compute_prior_gate_logits(
+        self,
+        tab_prob: Tensor,
+        temp_prob: Tensor,
+        proto_prob: Tensor,
+        evidence_progress: Tensor,
+        proto_margin: Tensor,
+    ) -> Tensor:
+        tab_conf = torch.abs(tab_prob - 0.5) * 2.0
+        temp_conf = torch.abs(temp_prob - 0.5) * 2.0
+        proto_conf = torch.abs(proto_prob - 0.5) * 2.0
+        proto_signal = torch.sigmoid(proto_margin.squeeze(1))
+        disagreement = (
+            torch.abs(tab_prob - temp_prob)
+            + torch.abs(tab_prob - proto_prob)
+            + torch.abs(temp_prob - proto_prob)
+        ) / 3.0
+        scores = torch.stack(
+            [
+                0.75 * evidence_progress + 0.75 * tab_conf + 0.15 * (1.0 - disagreement),
+                0.55 * (1.0 - evidence_progress) + 0.70 * temp_conf + 0.20 * disagreement,
+                0.45 * (1.0 - evidence_progress) + 0.60 * proto_conf + 0.55 * proto_signal + 0.20 * disagreement,
+            ],
+            dim=1,
+        )
+        return torch.log(scores.clamp_min(1e-6))
 
     def forward(self, batch: dict[str, Tensor]) -> dict[str, Tensor]:
         numeric = batch["numeric"]
         categorical = batch["categorical"]
         sequence = batch["sequence"]
+        sequence_mask = batch["sequence_mask"]
         evidence_progress = batch["evidence_progress"]
         batch_size = numeric.shape[0]
         enabled_mask = self.enabled_mask(batch_size, numeric.device)
 
-        tab_logits, _ = self.tabular_branch(numeric, categorical)
-        temp_logits, _ = self.temporal_branch(sequence)
-        proto_logits, _, proto_margin = self.prototype_branch(self.build_flat_prototype_features(numeric, categorical))
+        tab_logits, tab_repr = self.tabular_branch(numeric, categorical)
+        temp_logits, temp_repr = self.temporal_branch(sequence, sequence_mask, evidence_progress)
+        proto_logits, proto_repr, proto_margin, proto_class_distances, proto_assignments = self.prototype_branch(
+            self.build_flat_prototype_features(numeric, categorical)
+        )
 
         if self.disable_tabular_branch:
             tab_logits = torch.zeros_like(tab_logits)
@@ -734,7 +888,9 @@ class FullHybridEarlyDetectionModel(nn.Module):
             temp_logits = torch.zeros_like(temp_logits)
         if self.disable_prototype_branch:
             proto_logits = torch.zeros_like(proto_logits)
+            proto_repr = torch.zeros_like(proto_repr)
             proto_margin = torch.zeros_like(proto_margin)
+            proto_class_distances = torch.zeros_like(proto_class_distances)
 
         tab_prob = torch.softmax(tab_logits, dim=1)[:, 1]
         temp_prob = torch.softmax(temp_logits, dim=1)[:, 1]
@@ -745,8 +901,24 @@ class FullHybridEarlyDetectionModel(nn.Module):
         gate_proto_prob = proto_prob if not self.disable_prototype_branch else torch.full_like(proto_prob, 0.5)
         gate_proto_margin = proto_margin if not self.disable_prototype_branch else torch.zeros_like(proto_margin)
 
-        raw_weights = self.gating(gate_tab_prob, gate_temp_prob, gate_proto_prob, evidence_progress, gate_proto_margin)
-        weights = self._uniform_or_masked_weights(raw_weights, enabled_mask)
+        prior_logits = self.compute_prior_gate_logits(
+            gate_tab_prob,
+            gate_temp_prob,
+            gate_proto_prob,
+            evidence_progress,
+            gate_proto_margin,
+        )
+        gate_residual_logits = self.gating(
+            gate_tab_prob,
+            gate_temp_prob,
+            gate_proto_prob,
+            evidence_progress,
+            gate_proto_margin,
+            tab_repr,
+            temp_repr,
+            proto_repr,
+        )
+        weights = self._uniform_or_masked_weights(prior_logits + 0.5 * gate_residual_logits, enabled_mask)
 
         fused_logits = (
             weights[:, 0:1] * tab_logits
@@ -758,6 +930,15 @@ class FullHybridEarlyDetectionModel(nn.Module):
         temp_conf = torch.abs(temp_prob - 0.5) * 2.0
         proto_conf = torch.abs(proto_prob - 0.5) * 2.0
         branch_probs = torch.stack([tab_prob, temp_prob, proto_prob], dim=1)
+        gate_tab_repr, gate_temp_repr, gate_proto_repr = self.gating.project_representations(tab_repr, temp_repr, proto_repr)
+        branch_repr_cosines = torch.stack(
+            [
+                F.cosine_similarity(gate_tab_repr, gate_temp_repr, dim=1),
+                F.cosine_similarity(gate_tab_repr, gate_proto_repr, dim=1),
+                F.cosine_similarity(gate_temp_repr, gate_proto_repr, dim=1),
+            ],
+            dim=1,
+        )
         branch_votes = (branch_probs >= 0.5).float() * enabled_mask
         enabled_counts = enabled_mask.sum(dim=1).clamp_min(1.0)
         attack_votes = branch_votes.sum(dim=1)
@@ -780,11 +961,63 @@ class FullHybridEarlyDetectionModel(nn.Module):
             "tab_conf": tab_conf,
             "temp_conf": temp_conf,
             "proto_conf": proto_conf,
+            "tab_repr": tab_repr,
+            "temp_repr": temp_repr,
+            "proto_repr": proto_repr,
+            "branch_repr_cosines": branch_repr_cosines,
             "branch_agreement": branch_agreement,
             "fused_prob": torch.softmax(fused_logits, dim=1)[:, 1],
             "proto_margin": proto_margin.squeeze(1),
+            "proto_class_distances": proto_class_distances,
+            "proto_assignments": proto_assignments,
             "enabled_mask": enabled_mask,
         }
+
+
+def compute_hybrid_loss(model: FullHybridEarlyDetectionModel, out: dict[str, Tensor], label: Tensor, ce: nn.Module) -> Tensor:
+    loss = ce(out["fused_logits"], label)
+    aux_weight = 0.25
+    branch_logits = []
+    if not model.disable_tabular_branch:
+        branch_logits.append(out["tab_logits"])
+        loss = loss + aux_weight * ce(out["tab_logits"], label)
+    if not model.disable_temporal_branch:
+        branch_logits.append(out["temp_logits"])
+        loss = loss + aux_weight * ce(out["temp_logits"], label)
+    if not model.disable_prototype_branch:
+        branch_logits.append(out["proto_logits"])
+        loss = loss + aux_weight * ce(out["proto_logits"], label)
+        pos_dist = out["proto_class_distances"].gather(1, label.unsqueeze(1)).squeeze(1)
+        neg_dist = out["proto_class_distances"].gather(1, (1 - label).unsqueeze(1)).squeeze(1)
+        metric_loss = F.relu(pos_dist - neg_dist + 0.35).mean()
+        loss = loss + 0.20 * metric_loss
+
+    enabled_mask = out["enabled_mask"]
+    uniform_weights = enabled_mask / enabled_mask.sum(dim=1, keepdim=True).clamp_min(1e-8)
+    gate_balance_penalty = ((out["weights"] - uniform_weights) ** 2 * enabled_mask).sum(dim=1).mean()
+    loss = loss + 0.05 * gate_balance_penalty
+
+    per_branch_losses = []
+    large_penalty = torch.full((label.shape[0],), 1e4, device=label.device)
+    if not model.disable_tabular_branch:
+        per_branch_losses.append(F.cross_entropy(out["tab_logits"], label, reduction="none"))
+    else:
+        per_branch_losses.append(large_penalty)
+    if not model.disable_temporal_branch:
+        per_branch_losses.append(F.cross_entropy(out["temp_logits"], label, reduction="none"))
+    else:
+        per_branch_losses.append(large_penalty)
+    if not model.disable_prototype_branch:
+        per_branch_losses.append(F.cross_entropy(out["proto_logits"], label, reduction="none"))
+    else:
+        per_branch_losses.append(large_penalty)
+    oracle_targets = torch.softmax(-torch.stack(per_branch_losses, dim=1) / 0.35, dim=1)
+    gate_alignment_loss = -(oracle_targets * torch.log(out["weights"].clamp_min(1e-6))).sum(dim=1).mean()
+    loss = loss + 0.15 * gate_alignment_loss
+
+    cosine_penalty = (out["branch_repr_cosines"] ** 2).mean()
+    loss = loss + 0.03 * cosine_penalty
+    return loss
 
 
 @dataclass
@@ -798,6 +1031,8 @@ class HybridTrainingArtifacts:
     history: list[dict[str, float | int | str]]
     best_epoch: int
     best_val_metrics: dict[str, float | int]
+    decision_threshold: float
+    threshold_val_f1_attack: float
     ablation_config: dict[str, bool]
 
 
@@ -816,7 +1051,7 @@ def build_dataset(df: pd.DataFrame, preprocessor: HybridTorchPreprocessor, seq_l
 
 
 @torch.no_grad()
-def evaluate_model_on_loader(model: FullHybridEarlyDetectionModel, loader: DataLoader) -> dict[str, float]:
+def collect_model_scores(model: FullHybridEarlyDetectionModel, loader: DataLoader) -> tuple[np.ndarray, np.ndarray, float]:
     model.eval()
     losses = []
     logits_all = []
@@ -826,10 +1061,7 @@ def evaluate_model_on_loader(model: FullHybridEarlyDetectionModel, loader: DataL
         batch = {k: v.to(DEVICE) for k, v in batch.items()}
         out = model(batch)
         label = batch["label"]
-        loss = ce(out["fused_logits"], label)
-        loss = loss + 0.25 * ce(out["tab_logits"], label)
-        loss = loss + 0.25 * ce(out["temp_logits"], label)
-        loss = loss + 0.25 * ce(out["proto_logits"], label)
+        loss = compute_hybrid_loss(model, out, label, ce)
         losses.append(float(loss.item()))
         logits_all.append(out["fused_logits"].cpu())
         labels_all.append(label.cpu())
@@ -837,9 +1069,20 @@ def evaluate_model_on_loader(model: FullHybridEarlyDetectionModel, loader: DataL
     logits = torch.cat(logits_all, dim=0)
     labels = torch.cat(labels_all, dim=0)
     probs = torch.softmax(logits, dim=1)[:, 1].numpy()
-    preds = (probs >= 0.5).astype(np.int64)
-    metrics = compute_metrics(pd.Series(labels.numpy()), preds)
-    metrics["loss"] = float(np.mean(losses)) if losses else 0.0
+    return labels.numpy(), probs, float(np.mean(losses)) if losses else 0.0
+
+
+@torch.no_grad()
+def evaluate_model_on_loader(
+    model: FullHybridEarlyDetectionModel,
+    loader: DataLoader,
+    threshold: float = 0.5,
+) -> dict[str, float]:
+    labels, probs, loss = collect_model_scores(model, loader)
+    preds = (probs >= threshold).astype(np.int64)
+    metrics = compute_metrics(pd.Series(labels), preds)
+    metrics["loss"] = loss
+    metrics["decision_threshold"] = float(threshold)
     return metrics
 
 
@@ -864,6 +1107,8 @@ def train_full_hybrid(
     attention_dropout: float,
     ffn_dropout: float,
     residual_dropout: float,
+    gate_uniform_mix: float,
+    min_branch_weight: float,
     seed: int,
     train_val_fraction: float,
     deterministic: bool,
@@ -903,6 +1148,8 @@ def train_full_hybrid(
         attention_dropout=attention_dropout,
         ffn_dropout=ffn_dropout,
         residual_dropout=residual_dropout,
+        gate_uniform_mix=gate_uniform_mix,
+        min_branch_weight=min_branch_weight,
         disable_tabular_branch=disable_tabular_branch,
         disable_temporal_branch=disable_temporal_branch,
         disable_prototype_branch=disable_prototype_branch,
@@ -924,10 +1171,7 @@ def train_full_hybrid(
             batch = {k: v.to(DEVICE) for k, v in batch.items()}
             out = model(batch)
             label = batch["label"]
-            loss = ce(out["fused_logits"], label)
-            loss = loss + 0.25 * ce(out["tab_logits"], label)
-            loss = loss + 0.25 * ce(out["temp_logits"], label)
-            loss = loss + 0.25 * ce(out["proto_logits"], label)
+            loss = compute_hybrid_loss(model, out, label, ce)
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
@@ -960,6 +1204,10 @@ def train_full_hybrid(
 
     model.load_state_dict(best_state)
     model.prototype_branch.recompute_prototypes(eval_loader, model)
+    val_labels, val_probs, _ = collect_model_scores(model, val_loader)
+    decision_threshold, threshold_val_f1 = find_best_attack_f1_threshold(val_labels, val_probs)
+    best_val_metrics = evaluate_model_on_loader(model, val_loader, threshold=decision_threshold)
+    best_val_metrics["threshold_val_f1_attack"] = threshold_val_f1
 
     return HybridTrainingArtifacts(
         model=model,
@@ -971,6 +1219,8 @@ def train_full_hybrid(
         history=history,
         best_epoch=best_epoch,
         best_val_metrics=best_val_metrics,
+        decision_threshold=decision_threshold,
+        threshold_val_f1_attack=threshold_val_f1,
         ablation_config={
             "disable_tabular_branch": disable_tabular_branch,
             "disable_temporal_branch": disable_temporal_branch,
@@ -993,7 +1243,7 @@ def predict_with_full_hybrid(df: pd.DataFrame, artifacts: HybridTrainingArtifact
         batch = {k: v.to(DEVICE) for k, v in batch.items()}
         out = artifacts.model(batch)
         fused_prob = out["fused_prob"].cpu().numpy()
-        y_pred = (fused_prob >= 0.5).astype(np.int64)
+        y_pred = (fused_prob >= artifacts.decision_threshold).astype(np.int64)
         branch_winner = np.argmax(out["weights"].cpu().numpy(), axis=1)
         rows.append(
             pd.DataFrame(
@@ -1011,6 +1261,7 @@ def predict_with_full_hybrid(df: pd.DataFrame, artifacts: HybridTrainingArtifact
                     "branch_agreement": out["branch_agreement"].cpu().numpy(),
                     "branch_winner": branch_winner,
                     "fused_prob": fused_prob,
+                    "decision_threshold": artifacts.decision_threshold,
                     "y_pred": y_pred,
                 },
                 index=np.arange(offset, offset + batch_size_now),
@@ -1054,15 +1305,19 @@ def evaluate_full_hybrid_iot23_target_split(
     detail_rows = []
     diagnostics_rows = []
 
+    full_pred_df = pd.concat(
+        [df.reset_index(drop=True), predict_with_full_hybrid(df, artifacts, eval_batch_size)],
+        axis=1,
+    )
+    full_pred_df["y_score"] = full_pred_df["fused_prob"]
+
     first_tp_rows = []
-    for scenario, group in df.groupby("scenario", sort=False):
+    for scenario, group in full_pred_df.groupby("scenario", sort=False):
         first_fraction = None
         for fraction in fractions:
             keep = max(1, int(len(group) * fraction))
-            prefix_df = group.iloc[:keep].copy()
-            pred_only = predict_with_full_hybrid(prefix_df, artifacts, eval_batch_size)
-            joined = pd.concat([prefix_df.reset_index(drop=True), pred_only], axis=1)
-            if ((joined["label"] == 1) & (joined["y_pred"] == 1)).any():
+            prefix_df = group.iloc[:keep]
+            if ((prefix_df["label"] == 1) & (prefix_df["y_pred"] == 1)).any():
                 first_fraction = float(fraction)
                 break
         first_tp_rows.append({"scenario": scenario, "first_true_positive_fraction": first_fraction})
@@ -1071,13 +1326,10 @@ def evaluate_full_hybrid_iot23_target_split(
 
     for fraction in fractions:
         parts = []
-        for _, group in df.groupby("scenario", sort=False):
+        for _, group in full_pred_df.groupby("scenario", sort=False):
             keep = max(1, int(len(group) * fraction))
             parts.append(group.iloc[:keep])
-        prefix_df = pd.concat(parts, ignore_index=True).copy()
-        pred_only = predict_with_full_hybrid(prefix_df, artifacts, eval_batch_size)
-        pred_df = pd.concat([prefix_df.reset_index(drop=True), pred_only], axis=1)
-        pred_df["y_score"] = pred_df["fused_prob"]
+        pred_df = pd.concat(parts, ignore_index=True).copy()
 
         metrics = compute_metrics(pred_df["label"], pred_df["y_pred"])
         diagnostics = summarize_prediction_diagnostics(pred_df)
@@ -1093,6 +1345,7 @@ def evaluate_full_hybrid_iot23_target_split(
                 "fraction": fraction,
                 "rows_evaluated": int(len(pred_df)),
                 "n_scenarios": int(pred_df["scenario"].nunique()),
+                "decision_threshold": float(artifacts.decision_threshold),
                 **diagnostics,
                 **metrics,
             }
@@ -1153,6 +1406,7 @@ def evaluate_full_hybrid_unsw_target_split(
                 "rows_evaluated": int(len(pred_df)),
                 "n_attack_categories": int(pred_df["attack_cat"].nunique()),
                 "first_true_positive_fraction": first_tp,
+                "decision_threshold": float(artifacts.decision_threshold),
                 **diagnostics,
                 **metrics,
             }

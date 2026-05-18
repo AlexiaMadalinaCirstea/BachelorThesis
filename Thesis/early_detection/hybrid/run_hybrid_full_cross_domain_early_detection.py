@@ -111,6 +111,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attention_dropout", type=float, default=None)
     parser.add_argument("--ffn_dropout", type=float, default=None)
     parser.add_argument("--residual_dropout", type=float, default=None)
+    parser.add_argument("--gate_uniform_mix", type=float, default=0.2)
+    parser.add_argument("--min_branch_weight", type=float, default=0.05)
     parser.add_argument("--disable_tabular_branch", action="store_true")
     parser.add_argument("--disable_temporal_branch", action="store_true")
     parser.add_argument("--disable_prototype_branch", action="store_true")
@@ -269,6 +271,8 @@ def main() -> None:
             attention_dropout=attention_dropout,
             ffn_dropout=ffn_dropout,
             residual_dropout=residual_dropout,
+            gate_uniform_mix=args.gate_uniform_mix,
+            min_branch_weight=args.min_branch_weight,
             seed=args.seed,
             train_val_fraction=args.train_val_fraction,
             deterministic=args.deterministic,
@@ -289,6 +293,8 @@ def main() -> None:
             "history": artifacts.history,
             "best_epoch": artifacts.best_epoch,
             "best_val_metrics": artifacts.best_val_metrics,
+            "decision_threshold": artifacts.decision_threshold,
+            "threshold_val_f1_attack": artifacts.threshold_val_f1_attack,
             "ablation_config": artifacts.ablation_config,
         }
         joblib.dump(artifact_payload, direction_dir / "hybrid_full_artifacts.joblib")
@@ -353,6 +359,8 @@ def main() -> None:
             "attention_dropout": attention_dropout,
             "ffn_dropout": ffn_dropout,
             "residual_dropout": residual_dropout,
+            "gate_uniform_mix": args.gate_uniform_mix,
+            "min_branch_weight": args.min_branch_weight,
             "epochs": args.epochs,
             "batch_size": args.batch_size,
             "eval_batch_size": args.eval_batch_size,
@@ -365,6 +373,8 @@ def main() -> None:
             "uniform_gating": args.uniform_gating,
             "best_epoch": artifacts.best_epoch,
             "best_val_metrics": artifacts.best_val_metrics,
+            "decision_threshold": artifacts.decision_threshold,
+            "threshold_val_f1_attack": artifacts.threshold_val_f1_attack,
         }
         save_json(run_config, direction_dir / "run_config.json")
 
