@@ -1,60 +1,114 @@
-# README FOR MY THESIS REPOSITORY
-# NOTE: THIS IS NOT THE FINAL README! IT IS BEING UPDATED AS I'M WORKING ON IT
+# Bachelor Thesis Repository
 
-This repository contains the code and the pipeline for my bachelor thesis on intrusion detection under domain shift, with a focus on understanding why machine learning models fail to generalize across heterogeneous network environments.
+This repository contains the code, experiment runners, and analysis pipeline for my bachelor thesis on intrusion detection under domain shift. The project studies how machine-learning-based intrusion detectors behave when training and evaluation distributions differ, with a particular focus on scenario shift, cross-domain transfer, early intrusion detection, and hybrid modeling.
 
-My thesis investigates how models trained on network traffic from IoT environments behave under scenario shift and cross-domain transfer, and whether this failure can be explained through feature instability rather than model capacity alone. I will also explore transfer learning based on this, early intrusion detection as well as hybrid architectures and models and deep learning!
+The central theme of the thesis is not only whether a model performs well on average, but why strong models fail to generalize across heterogeneous network environments. A core conclusion of the work is that generalization failure under domain shift is often driven more by instability in feature reliance than by model capacity alone.
 
-## Thesis focus
+## Thesis scope
 
-The core research question is not simply which model performs best, but rather:
+The repository covers the following major experiment families:
 
-- how domain shift affects intrusion detection performance,
-- which features remain stable across scenarios,
-- which features transfer across domains,
-- and why strong models fail on unseen environments.
+- IoT-23 preprocessing and baseline binary intrusion detection
+- Leave-One-Scenario-Out evaluation on IoT-23
+- feature stability and feature transfer analysis
+- curated cross-dataset feature alignment between IoT-23 and UNSW-NB15
+- source-only cross-domain shift experiments
+- transfer-learning experiments across IoT-23 and UNSW-NB15
+- in-domain early detection
+- cross-domain early detection
+- transfer-learning-based early detection
+- hybrid early-detection experiments
 
-The main datasets used are:
+## Datasets
 
-- **IoT-23** for scenario-based intrusion detection experiments. Link for download: https://www.stratosphereips.org/datasets-iot23
-- **UNSW-NB15** for cross-domain evaluation. Link for download: https://unsw-my.sharepoint.com/personal/z5025758_ad_unsw_edu_au/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fz5025758%5Fad%5Funsw%5Fedu%5Fau%2FDocuments%2FUNSW%2DNB15%20dataset&ga=1
+The main datasets used throughout the thesis are:
 
-## Current research direction
+- **IoT-23** for scenario-based intrusion detection experiments: [https://www.stratosphereips.org/datasets-iot23](https://www.stratosphereips.org/datasets-iot23)
+- **UNSW-NB15** for cross-domain evaluation: (https://research.unsw.edu.au/projects/unsw-nb15-dataset)
 
-So far, the project includes:
-
-- preprocessing and parsing of IoT-23 `conn.log.labeled` files,
-- leakage-safe scenario-level splitting,
-- baseline Random Forest and XGBoost models,
-- Leave-One-Scenario-Out (LOSO) evaluation on both models,
-- feature stability analysis across LOSO folds,
-- transferability-oriented feature analysis,
-- cross-dataset evaluation tooling.
-
-A central finding of my work is that generalization failure under domain shift appears to be driven more by **instability in feature reliance** than by insufficient model complexity.
+Some scripts expect the datasets to be placed under the `Datasets/` directory used throughout the repository.
 
 ## Repository structure
 
-The project currently uses the following structure:
+The repository is organized around the major stages of the thesis:
 
 ```text
+cli/
+  GUI for browsing and running experiments
+cross_domain_shift/
+  source-only cross-domain shift experiments and analysis
 data_preprocessing/
-├── analyze_feature_transfer.py
-├── analyze_loso_results_rf.py
-├── compare_baseline_models.py
-├── compute_feature_stability.py
-├── cross_dataset_eval.py
-├── data_prep_iot23.py
-├── evaluate.py
-├── local_test.py
-├── loso_rf.py
-├── loso_xgboost.py
-├── plot_cross_dataset_results.py
-├── plot_feature_stability_full.py
-├── research_analysis_suite.py
-├── splitters.py
-├── train_baseline_rf.py
-└── train_baseline_xgboost.py
+  IoT-23 preprocessing, baselines, LOSO evaluation, and feature analysis
+early_detection/
+  in-domain, cross-domain, transfer-learning-based, and hybrid early-detection studies
+feature_alignment/
+  shared-feature comparison and curated alignment construction
+full_dataset_preprocessing/
+  full-dataset IoT-23 and UNSW-NB15 baseline pipelines
+transfer_learning/
+  transfer-learning experiments, updated recipe, hypothesis studies, and final tables
+```
 
+## Installation
 
-Obviously, this will change and will adapt as I go. I aim to achieve separations of concerns for a better understandability, and I know that my current repository structure is not denoting that. Apologies for this :(
+Install the core Python dependencies from the thesis root:
+
+```powershell
+pip install -r requirements.txt
+```
+
+## Running experiments
+
+Experiments can be run in two ways.
+
+### 1. Use the GUI
+
+The repository includes a GUI that lets you browse experiment groups and launch the registered experiment and analysis scripts directly.
+
+Run it from the thesis root:
+
+```powershell
+python .\cli\gui.py
+```
+
+The GUI currently exposes the thesis experiment families, including:
+
+- IoT-23 baselines and extended analyses
+- UNSW-NB15 baselines and analyses
+- feature alignment
+- cross-domain shift
+- transfer learning
+- transfer hypothesis studies
+- in-domain early detection
+- cross-domain early detection
+- transfer-learning early detection
+- hybrid early detection
+
+### 2. Run scripts directly
+
+Every major experiment family also provides standalone Python runners and analyzers inside its folder. For example:
+
+```powershell
+python .\cross_domain_shift\run_cross_domain_shift.py
+python .\early_detection\cross_domain_early_detection\run_cross_domain_multi_seed.py
+python .\early_detection\transfer_learning_based_early_detection\analyze_transfer_learning_multi_seed.py
+```
+
+Many subfolders include their own `README.md` with folder-specific commands, assumptions, and output descriptions.
+
+## Notes on outputs
+
+Most experiment scripts write outputs into experiment-specific directories inside the corresponding thesis subfolder or under dataset-specific output folders. Typical artifacts include:
+
+- run configuration files
+- prediction files
+- summary CSV tables
+- plots
+- feature-importance exports
+- thesis-ready result tables for later chapters
+
+Because this repository contains many staged experiments developed across the full thesis process, some folders represent exploratory or intermediate steps, while others correspond to the final thesis-ready pipelines.
+
+## Final remark
+
+This repository reflects the full progression of the thesis from preprocessing and baseline modeling to cross-domain transfer, early detection, and hybrid architectures. The code is therefore intentionally broad: it is both a research workspace and the final experimental record behind the thesis.

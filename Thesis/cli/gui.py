@@ -74,6 +74,7 @@ EXPERIMENT_GROUPS = {
         "iot23_xgb_baseline_threshold_improved",
         "iot23_rf_full_loso",
         "iot23_xgb_full_loso",
+        "iot23_xgb_threshold_analysis",
     ],
     "Transfer Learning": [
         "transfer_learning_core",
@@ -122,6 +123,12 @@ EXPERIMENT_GROUPS = {
         "early_transfer_learning_multiseed_run",
         "early_transfer_learning_multiseed_analyze",
     ],
+    "Early Detection Hybrid": [
+        "early_hybrid_interpretable_run",
+        "early_hybrid_full_torch_run",
+        "early_hybrid_analyze_runs",
+        "early_hybrid_analyze_in_depth",
+    ],
     "UNSW-NB15 Extended": [
         "unsw_feature_stability_transfer",
     ],
@@ -141,6 +148,7 @@ HEADER_COLORS = {
     "Early Detection In-Domain": "#7ee787",
     "Early Detection Cross-Domain": "#79c0ff",
     "Early Detection Transfer": "#ffa657",
+    "Early Detection Hybrid": "#d2a8ff",
     "UNSW-NB15 Extended": "#ffb86b",
 }
 

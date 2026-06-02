@@ -1,10 +1,6 @@
 # Cross-Domain Early Detection
 
-This folder contains the cross-domain early-detection experiments for the thesis.
-
-## Goal
-
-Train on one dataset, evaluate on the other, and ask not only whether transfer works at all, but how much malicious signal is recoverable when only an early prefix of the target-domain evidence is visible.
+This folder contains the cross-domain early-detection experiments.
 
 The setup combines:
 
@@ -21,8 +17,8 @@ Cross-domain early detection is defined on the target dataset only.
 
 This means the two directions remain methodologically analogous, but not temporally identical:
 
-- `UNSW-NB15 -> IoT-23` tests transfer into true scenario-temporal early detection.
-- `IoT-23 -> UNSW-NB15` tests transfer into an ordered-prefix early-observation setting.
+- `UNSW-NB15 -> IoT-23` tests into true scenario-temporal early detection.
+- `IoT-23 -> UNSW-NB15` tests into an ordered-prefix early-observation setting.
 
 ## Scripts
 

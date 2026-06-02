@@ -489,6 +489,38 @@ COMMANDS.update({
             "early_detection/transfer_learning_based_early_detection/analyze_transfer_learning_multi_seed.py",
         ],
     },
+    "early_hybrid_interpretable_run": {
+        "label": "Early detection - Hybrid interpretable run",
+        "description": "Run the interpretable hybrid source-only cross-domain early-detection baseline.",
+        "cmd": [
+            PYTHON,
+            "early_detection/hybrid/run_hybrid_cross_domain_early_detection.py",
+        ],
+    },
+    "early_hybrid_full_torch_run": {
+        "label": "Early detection - Hybrid full Torch run",
+        "description": "Run the full Torch hybrid source-only cross-domain early-detection model.",
+        "cmd": [
+            PYTHON,
+            "early_detection/hybrid/run_hybrid_full_cross_domain_early_detection.py",
+        ],
+    },
+    "early_hybrid_analyze_runs": {
+        "label": "Early detection - Analyze hybrid runs",
+        "description": "Aggregate hybrid run outputs and generate branch-weight and performance plots.",
+        "cmd": [
+            PYTHON,
+            "early_detection/hybrid/analyze_hybrid_runs.py",
+        ],
+    },
+    "early_hybrid_analyze_in_depth": {
+        "label": "Early detection - In-depth hybrid analysis",
+        "description": "Run the in-depth hybrid multi-seed analyzer across ablations, seeds, and directions.",
+        "cmd": [
+            PYTHON,
+            "early_detection/hybrid/analyzer_in_depth_hybrid.py",
+        ],
+    },
 })
 
 COMMANDS.update({
@@ -719,6 +751,15 @@ COMMANDS.update({
             "--target_col", "label_binary",
             "--seed", "42",
             "--decision_threshold", "0.50",
+        ],
+    },
+    "iot23_xgb_threshold_analysis": {
+        "label": "Full IoT-23 - XGB threshold analysis",
+        "description": "Recompute metrics across multiple decision thresholds for saved improved XGBoost baseline prediction files.",
+        "cmd": [
+            PYTHON,
+            "full_dataset_preprocessing/baseline_improved_IoT23/baseline_analysis/analyze_thresholds_xgb_normal.py",
+            "--base_dir", str(ROOT / "Datasets" / "IoT23" / "processed_full" / "iot23"),
         ],
     },
     "unsw_feature_stability_transfer": {
